@@ -1,0 +1,18 @@
+{
+    "data_sources": [
+        {
+            "source_file": "C:\\src\\data\\akin\\BrandProductDedupingRawData.csv",
+            "indexer_settings": [
+                {
+                    "fields_to_index": ["_ADVERTISER_AND_PRODUCT"],
+                    "index_type": "minhashlsh",
+                    "thresholds": [1.0, 0.8],
+                    "case_sensitive":false,
+                    "use_shingles":false,
+                    "shingle_length": 4,
+                    "num_permutations": 128
+                }
+            ]
+        }
+    ]
+}
