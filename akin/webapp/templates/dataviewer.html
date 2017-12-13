@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block body %}
+    <script type="text/javascript">
+        $(function() {
+            $('#datasource').DataTable({"aaSorting": []});
+        });
+    </script>
+
+    <h2>Data Source</h2>
+    
+        <table id="datasource" class="display compact" width="100%">
+            <thead>
+                {% for header in data_headers %}
+                  <th>{{ header }}</th>
+                {% endfor %}
+            </thead>
+            <tbody>
+                {% for entry in data_entires %}
+                    <tr>
+                        {% for value in entry %}
+                        <td>
+                            {{- value -}}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+{% endblock %}

@@ -1,18 +1,15 @@
 {
-    "data_sources": [
+    "db_location": "C:\\src\\data\\akin\\test.db",
+    "group_templates": [
         {
-            "source_file": "C:\\src\\data\\akin\\BrandProductDedupingRawData.csv",
-            "indexer_settings": [
-                {
-                    "fields_to_index": ["_ADVERTISER_AND_PRODUCT"],
-                    "index_type": "minhashlsh",
-                    "thresholds": [1.0, 0.8],
-                    "case_sensitive":false,
-                    "use_shingles":false,
-                    "shingle_length": 4,
-                    "num_permutations": 128
-                }
-            ]
+            "name": "Default",
+            "description": "Use MinHashLSH to find groups with a Jaccard similarity of 1.",
+            "index_type": "minhashlsh",
+            "threshold": 1.0,
+            "case_sensitive":false,
+            "use_shingles":false,
+            "shingle_length": 4,
+            "num_permutations": 128
         }
     ]
 }
