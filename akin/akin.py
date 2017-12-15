@@ -174,34 +174,27 @@ class Akin(object):
         num_perm = group_settings.num_permutations
 
         field_hash = Akin._generate_groupid(field, group_settings)
-        field_hash_len = field_hash + '_len'
-        lsh = MinHashLSH(threshold, num_perm)
-        for i, entry in enumerate(data_source.data):
-            if force_rehash or field_hash not in entry:
-                min_hash = MinHash(num_perm)
+        #field_hash_len = field_hash + '_len'
+        lsh = MinHashLSH(threshold, num_perm, 
+                         storage_config={'type': 'redis', 'redis': { 'host':'localhost', 'port': 6379 }})
+        with lsh.insertion_session() as session:
+            for i, entry in enumerate(data_source.data):
                 field_value = entry[field].lower()
-                set_len = 0
-                if use_shingles:
-                    if len(field_value) > shingle_len:
-                        for w in [field_value[i:i + shingle_len] for i in range(len(field_value) - shingle_len + 1)]:
-                            min_hash.update(w.encode('utf8'))
-                            set_len += 1
-                else:
-                    for w in field_value.split():
-                        min_hash.update(w.encode('utf8'))
-                        set_len += 1
-                entry[field_hash] = min_hash
-                entry[field_hash_len] = set_len
-            lsh.insert(i, entry[field_hash])
+                min_hash = Akin._create_minhash(field_value, num_perm, use_shingles, shingle_len)
+                session.insert(i, min_hash)
 
         all_groups = list()
         unseen_indices = [1] * len(data_source.data)
         for i, entry in enumerate(data_source.data):
-            if unseen_indices[i] == 0 or entry[field_hash_len] == 0:
+            if unseen_indices[i] == 0: # or entry[field_hash_len] == 0:
                 continue
+            field_value = entry[field].lower()
+            min_hash = Akin._create_minhash(field_value, num_perm, use_shingles, shingle_len)
             potential_group = list()
             matches = 0
-            for j in lsh.query(entry[field_hash]):
+            # field_value = entry[field].lower()
+            # min_hash = Akin._create_minhash(field_value, num_perm, use_shingles, shingle_len)
+            for j in lsh.query(min_hash):
                 matches += 1
                 potential_group.append(data_source.data[j])
                 unseen_indices[j] = 0
@@ -209,6 +202,20 @@ class Akin(object):
                 all_groups.append(potential_group)
 
         return field_hash, lsh, all_groups
+
+    @staticmethod
+    def _create_minhash(value, num_perm, use_shingles, shingle_len):
+        min_hash = MinHash(num_perm)
+
+        if use_shingles:
+            if len(value) > shingle_len:
+                for w in [value[i:i + shingle_len] for i in range(len(value) - shingle_len + 1)]:
+                    min_hash.update(w.encode('utf8'))
+        else:
+            for w in value.split():
+                min_hash.update(w.encode('utf8'))
+
+        return min_hash
 
 def export_group(group_data):
     filename = group_data.field + '.txt'

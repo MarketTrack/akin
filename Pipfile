@@ -9,6 +9,8 @@ name = "pypi"
 
 datasketch = "*"
 flask = "*"
+awscli = "*"
+awsebcli = "*"
 
 
 [dev-packages]
