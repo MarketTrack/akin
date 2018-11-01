@@ -1,14 +1,16 @@
+from akin import __version__, Akin
 from flask import Flask
-from akin import Akin
+from yaml import safe_load
+from os import chdir, path
 
-UPLOAD_FOLDER = 'c:\\src\\data\\akin'
-ALLOWED_EXTENSIONS = set(['txt', 'csv'])
+flask_app = Flask(__name__, instance_relative_config=True)
+flask_app.secret_key = f'{__file__}:{__version__}'
+with flask_app.open_instance_resource('service.yml') as configuration_file:
+    flask_app.config.from_mapping(safe_load(configuration_file))
 
-webapp = Flask(__name__)
-webapp.secret_key = 'its a secret to everyone'
-webapp.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+chdir(flask_app.instance_path)
 
-akin = Akin('brand_settings.json')
+akin = Akin(path.join(flask_app.instance_path, 'brand_settings.yml'))
 akin.initialize()
 
-from webapp import routes
+from akin.webapp import routes

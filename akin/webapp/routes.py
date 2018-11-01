@@ -1,27 +1,27 @@
-from webapp import webapp, akin
+from akin.webapp import flask_app, akin
 from flask import render_template, request, flash, redirect, url_for, jsonify
 from werkzeug.utils import secure_filename
 import os
 import csv
 import json
 
-@webapp.route('/')
-@webapp.route('/index')
+@flask_app.route('/')
+@flask_app.route('/index')
 def index():
     return render_template('home.html', akin=akin)
 
-@webapp.route('/delete_datasource')
+@flask_app.route('/delete_datasource')
 def delete_dataset():
     dataset_to_delete = request.args.get('datasource')
     success, result = akin.delete_datasource(dataset_to_delete)
     return result
 
-@webapp.route('/get_datasets')
+@flask_app.route('/get_datasets')
 def get_datasets():
     datasets = jsonify([dsk for dsk, dkv in akin.datasources.items()])
     return datasets
 
-@webapp.route('/get_groups/<dsname>')
+@flask_app.route('/get_groups/<dsname>')
 def get_groups(dsname):
     groups = jsonify([])
     datasource = akin.datasources.get(dsname)
@@ -29,7 +29,7 @@ def get_groups(dsname):
         groups = jsonify([g.field for g in datasource.groups.values()])
     return groups
 
-@webapp.route('/get_fields/<dsname>')
+@flask_app.route('/get_fields/<dsname>')
 def get_fields(dsname):
     fields = jsonify([])
     datasource = akin.datasources.get(dsname)
@@ -37,7 +37,7 @@ def get_fields(dsname):
         fields = jsonify([h for h in datasource.data[0].keys() if not h.startswith('__')])
     return fields
 
-@webapp.route('/create_group')
+@flask_app.route('/create_group')
 def create_group():
     dsname = request.args.get('dataset')
     field_name = request.args.get('field')
@@ -49,7 +49,7 @@ def create_group():
         akin.group_data(datasource, field_name, group_settings)
     return jsonify({'success':True})
 
-@webapp.route('/get_group_data')
+@flask_app.route('/get_group_data')
 def get_group_data():    
     dsname = request.args.get('dataset')
     group_name = request.args.get('group')
@@ -72,11 +72,11 @@ def get_group_data():
             data_entries = [[dv for dk, dv in de.items() if not dk.startswith('_') and not dk.startswith('\ufeff')] for de in data_entries]
             return json.dumps({'headers': headers, 'data': data_entries})
 
-@webapp.route('/asyncupload', methods = ['GET', 'POST'])
+@flask_app.route('/asyncupload', methods = ['GET', 'POST'])
 def asyncupload():
     f = request.files['file']
     filename = secure_filename(f.filename)
-    filepath = os.path.join(webapp.config['UPLOAD_FOLDER'], filename)
+    filepath = os.path.join(flask_app.config['UPLOAD_FOLDER'], filename)
     f.save(filepath)
 
     all_data_entries = []
@@ -87,12 +87,12 @@ def asyncupload():
     success, result = akin.add_datasource(filename, all_data_entries)
     return result
 
-@webapp.route('/uploadfile', methods = ['GET', 'POST'])
+@flask_app.route('/uploadfile', methods = ['GET', 'POST'])
 def uploadfile():
     if request.method == 'POST':
         f = request.files['file']
         filename = secure_filename(f.filename)
-        filepath = os.path.join(webapp.config['UPLOAD_FOLDER'], filename)
+        filepath = os.path.join(flask_app.config['UPLOAD_FOLDER'], filename)
         f.save(filepath)
 
         all_data_entries = []

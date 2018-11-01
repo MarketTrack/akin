@@ -1,8 +1,9 @@
 from collections import namedtuple
-import json
 import sqlite3
 import pickle
 from datasketch import MinHash, MinHashLSH
+
+__version__ = '0.1'
 
 GroupData = namedtuple('GroupData', ['data_source', 'field', 'lsh', 'values'])
 GroupTemplate = namedtuple('GroupTemplate', ['name', 'description', 'index_type', 'threshold', 
@@ -10,9 +11,10 @@ GroupTemplate = namedtuple('GroupTemplate', ['name', 'description', 'index_type'
 
 class AkinSettings(object):
     def __init__(self, path_to_settings):
+        from yaml import safe_load
         self._config = None
-        with open(path_to_settings) as f:
-            self._config = json.load(f)
+        with open(path_to_settings) as settings_file:
+            self._config = safe_load(settings_file)
 
     @property
     def dblocation(self):

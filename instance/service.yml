@@ -1,0 +1,4 @@
+UPLOAD_FOLDER: 'incoming/'
+ALLOWED_EXTENSIONS:
+  - 'txt'
+  - 'csv'
