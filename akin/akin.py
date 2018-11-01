@@ -1,12 +1,8 @@
-from collections import defaultdict
 from collections import namedtuple
-import csv
 import json
-import os
 import sqlite3
 import pickle
-from datetime import datetime
-from datasketch import MinHash, MinHashLSH, MinHashLSHEnsemble
+from datasketch import MinHash, MinHashLSH
 
 GroupData = namedtuple('GroupData', ['data_source', 'field', 'lsh', 'values'])
 GroupTemplate = namedtuple('GroupTemplate', ['name', 'description', 'index_type', 'threshold', 
@@ -44,7 +40,6 @@ class Akin(object):
     def __init__(self, path_to_settings):
         self._settings = AkinSettings(path_to_settings)
         self._datasources = dict()
-        self._conn = None
         self._grouptemplates = dict()
 
     @property
@@ -68,52 +63,54 @@ class Akin(object):
         group_data = GroupData(data_source=data_source.name, lsh=lsh, field=field_hash, values=groups)
         data_source.groups[group_data.field] = group_data
 
-        db_cursor = self._conn.cursor()
+        db_cursor, conn = self._get_db_cursor()
         db_cursor.execute('''INSERT INTO group_values VALUES (?,?,?,?)''', \
                           (data_source.name, field_hash, pickle.dumps(lsh), pickle.dumps(groups)))
-        self._conn.commit()
+        conn.commit()
 
         return groups
 
     def add_grouptemplate(self, group_template_name, group_template):
         if self.grouptemplates.get(group_template_name):
             return False, 'Data source with the name "{}" already exists'.format(group_template_name)
-        db_cursor = self._conn.cursor()
+        db_cursor, conn = self._get_db_cursor()
         db_cursor.execute('''INSERT INTO group_templates VALUES (?,?,?,?,?,?,?,?)''', \
                           (group_template.name, group_template.description, group_template.index_type, group_template.threshold,
                            group_template.case_sensitive, group_template.use_shingles, group_template.shingle_length, 
                            group_template.num_permutations))
-        self._conn.commit()
+        conn.commit()
         return True, 'Successfully added group template'
 
     def add_datasource(self, data_source_name, data):
         if self.datasources.get(data_source_name):
             return False, 'Data source with the name "{}" already exists'.format(data_source_name)
         self.datasources[data_source_name] = DataSource(data_source_name, data)
-        db_cursor = self._conn.cursor()
+        db_cursor, conn = self._get_db_cursor()
         db_cursor.execute('''INSERT INTO data_sources VALUES (?,?)''', \
                           (data_source_name, pickle.dumps(data)))
-        self._conn.commit()
+        conn.commit()
         return True, 'Successfully parsed and uploaded file'
 
     def delete_datasource(self, data_source_name):
         datasource = self.datasources.get(data_source_name)
         if not datasource:
             return False, 'No data source with the name "{}" exists'.format(data_source_name)
-        db_cursor = self._conn.cursor()
+        db_cursor, conn = self._get_db_cursor()
         db_cursor.execute('''DELETE FROM data_sources WHERE data_source_name=?''', \
                           (data_source_name,))
         db_cursor.execute('''DELETE FROM group_values WHERE data_source_name=?''', \
                           (data_source_name,))
-        self._conn.commit()
+        conn.commit()
         del self.datasources[data_source_name]
         return True, 'Successfully deleted datasource'
 
-    def initialize(self):
+    def _get_db_cursor(self):
         db_file = self._settings.dblocation if self._settings.dblocation else 'akin.db'
+        _conn = sqlite3.connect(db_file)
+        return _conn.cursor(), _conn
 
-        self._conn = sqlite3.connect(db_file)
-        db_cursor = self._conn.cursor()
+    def initialize(self):
+        db_cursor, conn = self._get_db_cursor()
 
         # Shrink the database
         db_cursor.execute('''VACUUM''')
@@ -151,8 +148,12 @@ class Akin(object):
             default_grouptemplate_90 = GroupTemplate(name="Default 0.9", description="Use MinHashLSH to find groups with a Jaccard similarity of 0.9.",
                                                   index_type="minhashlsh", threshold=0.9, case_sensitive=0, use_shingles=0, shingle_length=4,
                                                   num_permutations=128)
+            default_grouptemplate_90_s = GroupTemplate(name="Default 0.95 Shingled 3", description="Use MinHashLSH with shingling to find groups with a Jaccard similarity of 0.95.",
+                                                  index_type="minhashlsh", threshold=0.95, case_sensitive=0, use_shingles=1, shingle_length=3,
+                                                  num_permutations=128)
             self.add_grouptemplate(default_grouptemplate.name, default_grouptemplate)
             self.add_grouptemplate(default_grouptemplate_90.name, default_grouptemplate_90)
+            self.add_grouptemplate(default_grouptemplate_90_s.name, default_grouptemplate_90_s)
 
     @staticmethod
     def _generate_groupid(field, group_settings):

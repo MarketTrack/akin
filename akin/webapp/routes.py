@@ -68,37 +68,9 @@ def get_group_data():
                 for g in gl:
                     g['group_id'] = group_id
             data_entries = [item for sublist in group.values for item in sublist]
-            headers = [h for h in data_entries[0].keys() if not h.startswith('_')]
-            data_entries = [[dv for dk, dv in de.items() if not dk.startswith('_')] for de in data_entries]
-            #data_entries = [['<br/>'.join(map(str, i)) for i in zip(*[[gv for gk, gv in g.items()] for g in item])] for item in group.values]
-            # headers = [h for h in datasource.data[0].keys() if not h.startswith('_')]
-            # data_entries = [['<br/>'.join(map(str, i)) for i in zip(*[[gv for gk, gv in g.items() if not gk.startswith('_')] for g in item])] for item in group.values]
-            #['\r\n'.join(map(str, i)) for i in zip(*[g.values() for g in group.values[0]])]
-            #data_entries = [item for sublist in group.values for item in sublist]
-            #data_entries = [[dv for dk, dv in de.items() if not dk.startswith('_')] for de in data_entries]
-            #data_entries = [g.values for g in group]
-            #data_entries = [[dv for dk, dv in de.items() if not dk.startswith('_')] for de in data_entries]
+            headers = [h for h in data_entries[0].keys() if not h.startswith('_') and not h.startswith('\ufeff')]
+            data_entries = [[dv for dk, dv in de.items() if not dk.startswith('_') and not dk.startswith('\ufeff')] for de in data_entries]
             return json.dumps({'headers': headers, 'data': data_entries})
-
-@webapp.route('/dataviewer', methods = ['POST'])
-def dataviewer():
-    dsname = request.form.get('dataset')
-    group_name = request.form.get('group')
-    data_entries = list()
-    headers = list()
-    datasource = akin.datasources.get(dsname)
-    if datasource:
-        group = datasource.groups.get(group_name)
-        if group:
-            headers = [h for h in datasource.data[0].keys() if not h.startswith('_')]
-            data_entries = [['\r\n'.join(map(str, i)) for i in zip(*[g.values() for g in item])] for item in group.values]
-            # headers = [h for h in datasource.data[0].keys() if not h.startswith('_')]
-            # data_entries = [['\r\n'.join(map(str, i)) for i in zip(*[g.values() for g in item])] for item in group.values]
-            #data_entries = [item for sublist in group.values for item in sublist]
-            #data_entries = [[dv for dk, dv in de.items() if not dk.startswith('_')] for de in data_entries]
-            #data_entries = [g.values for g in group]
-            #data_entries = [[dv for dk, dv in de.items() if not dk.startswith('_')] for de in data_entries]
-            return render_template('dataviewer.html', data_headers=headers, data_entires=data_entries)
 
 @webapp.route('/asyncupload', methods = ['GET', 'POST'])
 def asyncupload():
