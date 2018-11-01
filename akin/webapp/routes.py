@@ -34,7 +34,7 @@ def get_fields(dsname):
     fields = jsonify([])
     datasource = akin.datasources.get(dsname)
     if datasource and datasource.data:
-        fields = jsonify([h for h in datasource.data[0].keys()])
+        fields = jsonify([h for h in datasource.data[0].keys() if not h.startswith('__')])
     return fields
 
 @webapp.route('/create_group')
