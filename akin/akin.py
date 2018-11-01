@@ -148,7 +148,11 @@ class Akin(object):
             default_grouptemplate = GroupTemplate(name="Default", description="Use MinHashLSH to find groups with a Jaccard similarity of 1.",
                                                   index_type="minhashlsh", threshold=1.0, case_sensitive=0, use_shingles=0, shingle_length=4,
                                                   num_permutations=128)
+            default_grouptemplate_90 = GroupTemplate(name="Default 0.9", description="Use MinHashLSH to find groups with a Jaccard similarity of 0.9.",
+                                                  index_type="minhashlsh", threshold=0.9, case_sensitive=0, use_shingles=0, shingle_length=4,
+                                                  num_permutations=128)
             self.add_grouptemplate(default_grouptemplate.name, default_grouptemplate)
+            self.add_grouptemplate(default_grouptemplate_90.name, default_grouptemplate_90)
 
     @staticmethod
     def _generate_groupid(field, group_settings):
@@ -217,10 +221,8 @@ def export_group(group_data):
             f.write(str([[gv for gk, gv in g.items() if not gk.startswith('_')] for g in lg]) + '\n')
 
 if __name__ == "__main__":
-    test = Akin('brand_settings.json')
-    test.initialize()
-    ds_fn = os.path.basename(test.groups[0].data_source._csv_location)
-    print(test.datasources[0])
+    akin = Akin('brand_settings.json')
+    akin.initialize()
 
 #c.execute('''CREATE TABLE group_values (data_source_name text, group_name text, lsh blob, group_values blob)''')
 #c.execute('''INSERT INTO group_values VALUES (?,?,?,?)''', (ds_fn, test.groups[0].field, pickle.dumps(test.groups[0].lsh) pickle.dumps(test.groups[0].values)))
