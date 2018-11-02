@@ -88,8 +88,9 @@ def get_group_data():
                 for g in gl:
                     g['group_id'] = group_id
             data_entries = [item for sublist in group.values for item in sublist]
-            headers = [h for h in data_entries[0].keys() if not h.startswith('_') and not h.startswith('\ufeff')]
-            data_entries = [[dv for dk, dv in de.items() if not dk.startswith('_') and not dk.startswith('\ufeff')] for de in data_entries]
+            if data_entries:
+                headers = [h for h in data_entries[0].keys() if not h.startswith('_') and not h.startswith('\ufeff')]
+                data_entries = [[dv for dk, dv in de.items() if not dk.startswith('_') and not dk.startswith('\ufeff')] for de in data_entries]
             return jsonify({'headers': headers, 'data': data_entries})
 
 
@@ -100,6 +101,15 @@ def asyncupload():
     f = request.files['file']
     filename = secure_filename(f.filename)
     filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+    
+    if not os.path.exists(os.path.dirname(filepath)):
+        try:
+            os.makedirs(os.path.dirname(filepath))
+        except OSError as exc: # Guard against race condition
+            import errno
+            if exc.errno != errno.EEXIST:
+                raise
+    
     f.save(filepath)
 
     all_data_entries = []
