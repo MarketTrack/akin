@@ -3,6 +3,7 @@ import sqlite3
 import pickle
 from datasketch import MinHash, MinHashLSH
 from logging import getLogger
+from weighted_levenshtein import lev, osa, dam_lev
 
 __version__ = '0.1'
 _log = getLogger(__name__)
@@ -106,6 +107,10 @@ class Akin(object):
     def add_datasource(self, data_source_name: str, data: Iterable[Dict[str, str]]) -> Tuple[bool, str]:
         if self.datasources.get(data_source_name):
             return False, f'Data source with the name "{data_source_name}" already exists'
+        # # TODO: JCC - Hack to convert unicode to ascii
+        # for data_row in data:
+        #     for key, val in data_row.items():
+        #         data_row[key] = val.encode("ascii","ignore").decode()
         self.datasources[data_source_name] = DataSource(data_source_name, data)
         db_cursor, conn = self._get_db_cursor()
         db_cursor.execute('''INSERT INTO data_sources VALUES (?,?)''', \
@@ -240,10 +245,39 @@ class Akin(object):
                 potential_group.append(data_source.data[j])
                 unseen_indices[j] = 0
             if len(potential_group) > 1:
-                all_groups.append(potential_group)
+                group_differs_internally = False
+                for group_item_index, group_item in enumerate(potential_group):
+                    item_value = group_item[field]
+                    other_item_values = [gitem[field] for gitemindex, gitem in enumerate(potential_group) if gitemindex != group_item_index]
+                    group_item.distances = Akin.calculate_lev_distances(item_value, other_item_values, lev)
+                    if group_item.distances:
+                        group_item.distances_avg = sum(group_item.distances) / len(group_item.distances)
+                        if group_item.distances_avg > 0:
+                            group_differs_internally = True
+                if group_differs_internally:
+                    all_groups.append(potential_group)
 
         return field_hash, lsh, all_groups
 
+    @staticmethod
+    def get_distance_methods() -> dict:
+        return {"Levenshtein": lev, "Optimal String Alignment": osa, "Damerau-Levenshtein": dam_lev}
+
+    @staticmethod
+    def calculate_lev_distances(value: str, values, method):
+        try:
+            return [method(value, i) for i in values]
+        except Exception as e:
+            _log.exception(e)
+        return None
+
+    @staticmethod
+    def calculate_lev_distances_by_name(value: str, values, method_name: str):
+        if method_name not in Akin.get_distance_methods():
+            _log.error(f'Unknown distance method {method_name}')
+            return None
+        method = Akin.get_distance_methods()[method_name]
+        return Akin.calculate_lev_distances(value, values, method)
 
 def export_group(group_data: GroupData):
     filename = group_data.field + '.txt'
