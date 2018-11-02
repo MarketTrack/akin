@@ -32,9 +32,12 @@ Here is a completely reasonable Flask launch configuration for starting the appl
                 "FLASK_ENV": "development"
             },
             "args": [
-                "run"
+                "run",
+                "--no-debugger",
+                "--no-reload"
             ],
             "jinja": true
         }
+    ]
 }
 ```

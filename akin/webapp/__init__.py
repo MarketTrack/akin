@@ -7,6 +7,8 @@ from os import chdir, path
 def create_app():
     app = Flask(__name__, instance_relative_config=True)
 
+    chdir(app.instance_path)
+
     log = app.logger
     try:
         with app.open_instance_resource('service-log.yml') as configuration_file:
@@ -23,12 +25,10 @@ def create_app():
     with app.open_instance_resource('service.yml') as configuration_file:
         app.config.from_mapping(safe_load(configuration_file))
 
-    chdir(app.instance_path)
-
     akin = Akin(path.join(app.instance_path, 'brand_settings.yml'))
     akin.initialize()
 
-    from akin.webapp.routes import blueprint as ui_blueprint
+    from akin.webapp.ui import blueprint as ui_blueprint
     app.register_blueprint(ui_blueprint, akin=akin)
 
     return app
