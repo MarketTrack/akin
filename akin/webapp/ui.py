@@ -1,7 +1,9 @@
 from akin import Akin
+from http import HTTPStatus
 from flask import Blueprint, current_app, request, jsonify
 from flask.blueprints import BlueprintSetupState
 from werkzeug.utils import secure_filename
+from typing import Callable, Tuple
 import os
 
 blueprint = Blueprint('ui', __name__)
@@ -22,14 +24,13 @@ def record(setup_state: BlueprintSetupState):
 @blueprint.route('/index')
 def index():
     from flask import render_template
-    return render_template('home.html', akin=_akin)
+    return render_template('home.html.j2', akin=_akin)
 
 
 @blueprint.route('/delete_datasource')
 def delete_dataset():
     dataset_to_delete = request.args.get('datasource')
-    success, result = _akin.delete_datasource(dataset_to_delete)
-    return result
+    return combine_result(*_akin.delete_datasource(dataset_to_delete))
 
 
 @blueprint.route('/get_datasets')
@@ -73,6 +74,7 @@ def create_group():
 def get_group_data():    
     dsname = request.args.get('dataset')
     group_name = request.args.get('group')
+
     data_entries = list()
     headers = list()
     datasource = _akin.datasources.get(dsname)
@@ -94,10 +96,10 @@ def get_group_data():
             return jsonify({'headers': headers, 'data': data_entries})
 
 
-@blueprint.route('/asyncupload', methods = ['GET', 'POST'])
-def asyncupload():
+@blueprint.route('/uploadfile', methods = ['POST'])
+def uploadfile():
     import csv
-    
+
     f = request.files['file']
     filename = secure_filename(f.filename)
     filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
@@ -117,28 +119,11 @@ def asyncupload():
         for row in csv.DictReader(data_file, dialect="excel"):
             all_data_entries.append(row)
 
-    success, result = _akin.add_datasource(filename, all_data_entries)
-    return result
+    return combine_result(*_akin.add_datasource(filename, all_data_entries))
 
 
-@blueprint.route('/uploadfile', methods = ['GET', 'POST'])
-def uploadfile():
-    import csv
-
-    if request.method == 'POST':
-        f = request.files['file']
-        filename = secure_filename(f.filename)
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-        f.save(filepath)
-
-        all_data_entries = []
-        with open(filepath, 'r', encoding='utf8') as data_file:
-            for row in csv.DictReader(data_file, dialect="excel"):
-                all_data_entries.append(row)
-
-        _akin.add_datasource(filename, all_data_entries)
-
-        return 'file uploaded successfully'
+def combine_result(success: bool, result: str) -> Tuple[object, HTTPStatus]:
+    return result, HTTPStatus.OK if success else HTTPStatus.BAD_REQUEST
 
 
 class InitializationError(RuntimeError):
