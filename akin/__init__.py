@@ -236,12 +236,10 @@ class Akin(object):
             if unseen_indices[i] == 0 or entry[field_hash_len] == 0:
                 continue
             potential_group = list()
-            matches = 0
             for j in lsh.query(entry[field_hash]):
-                matches += 1
                 potential_group.append(data_source.data[j])
                 unseen_indices[j] = 0
-            if matches > 1:
+            if len(potential_group) > 1:
                 all_groups.append(potential_group)
 
         return field_hash, lsh, all_groups
@@ -257,7 +255,3 @@ def export_group(group_data: GroupData):
 if __name__ == "__main__":
     akin = Akin('brand_settings.yml')
     akin.initialize()
-
-#c.execute('''CREATE TABLE group_values (data_source_name text, group_name text, lsh blob, group_values blob)''')
-#c.execute('''INSERT INTO group_values VALUES (?,?,?,?)''', (ds_fn, test.groups[0].field, pickle.dumps(test.groups[0].lsh) pickle.dumps(test.groups[0].values)))
-#c.execute('''INSERT INTO group_values VALUES (?,?,?,?,?,?,?,?)''', ("Default", "Use MinHashLSH to find groups with a Jaccard similarity of 1.","minhashlsh",1.0,0,0,4,128))
