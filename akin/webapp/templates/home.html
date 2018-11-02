@@ -39,7 +39,6 @@
       });
     </script>
       <dl>
-
             <dt>
           Available datasets:
             <dd>
@@ -70,9 +69,9 @@
             </dd>
             <dd><input type="button" id="create_group" style="width: 200px" value="Perform Grouping" /></dd>
         </dt>
-          <form id='upload_datasource' action="{{ url_for('uploadfile') }}" method=POST class=uploadfile enctype = "multipart/form-data">
+          <form id='upload_datasource' action="{{ url_for('ui.uploadfile') }}" method=POST class=uploadfile enctype = "multipart/form-data">
           Add a csv file:
-            <dd><input type = "file" name="file" style="width: 200px" /></dd>
+            <dd><input type = "file" name="file" style="width: auto" /></dd>
             <dd><input type = "submit"/></dd>
           </form>
       </dl>
@@ -87,6 +86,13 @@
     </ul>
 
     <script>
+        function notify(response){
+            if (response) {
+                var notification = $('#notification');
+                notification.text(response)
+                notification.show();
+            }
+        }
         $("#upload_datasource").submit(function(evt){	 
            evt.preventDefault();
            var formData = new FormData($(this)[0]);
@@ -101,10 +107,10 @@
             processData: false,
             success: function (response) {
               reload_datasets()
-              $('#notification').html(response);
+              notify(response);
             },
             error: function (jquery, response) {
-              $('#notification').html(response);
+              notify(response);
             }
         });
         return false;
@@ -120,10 +126,10 @@
           },
           success: function (result) {
             reload_datasets()
-            $('#notification').html(result);
+            notify(result);
           },
           error: function (result) {
-            $('#notification').html(result);
+            notify(result);
           }
         });
       });

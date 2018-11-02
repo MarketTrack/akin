@@ -1,24 +1,32 @@
 <!doctype html>
 <title>Akin</title>
-<script type=text/javascript src="{{ url_for('static', filename='jquery.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('static', filename='jquery.min.js') }}"></script>
 <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.15/css/jquery.dataTables.min.css"/>
-<script type=text/javascript src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+<script type="text/javascript" src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
 <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/rowgroup/1.0.2/css/rowGroup.dataTables.min.css"/>
-<script type=text/javascript src="https://cdn.datatables.net/rowgroup/1.0.2/js/dataTables.rowGroup.min.js"></script>
+<script type="text/javascript" src="https://cdn.datatables.net/rowgroup/1.0.2/js/dataTables.rowGroup.min.js"></script>
 <link rel=stylesheet type=text/css href="{{ url_for('static', filename='style.css') }}">
 
-<script type=text/javascript>
+<script type="text/javascript">
   $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
 </script>
 
-<div class=page>
+<div class="page">
   <h1>Welcome to Akin</h1>
-  <div class=metanav>
+  <div class="metanav">
       <a href="about.html">about</a>
   </div>
-  <div id=notification class=flash></div>
-  {% for message in get_flashed_messages() %}
-    <div id=flash class=flash>{{ message }}</div>
-  {% endfor %}
+  <div id="notification" class="flash" style="display: none;"></div>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+  <div id="flash" class="flash">
+    <ul>
+      {% for message in messages %}
+      <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+    {% endif %}
+  {% endwith %}
   {% block body %}{% endblock %}
 </div>

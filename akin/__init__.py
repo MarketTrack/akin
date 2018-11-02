@@ -1,13 +1,12 @@
-from collections import namedtuple
+from typing import NamedTuple
 import sqlite3
 import pickle
 from datasketch import MinHash, MinHashLSH
+from logging import getLogger
 
 __version__ = '0.1'
+_log = getLogger(__name__)
 
-GroupData = namedtuple('GroupData', ['data_source', 'field', 'lsh', 'values'])
-GroupTemplate = namedtuple('GroupTemplate', ['name', 'description', 'index_type', 'threshold', 
-                                             'case_sensitive', 'use_shingles', 'shingle_length', 'num_permutations'])
 
 class AkinSettings(object):
     def __init__(self, path_to_settings):
@@ -18,7 +17,8 @@ class AkinSettings(object):
 
     @property
     def dblocation(self):
-        return self._config.get('db_location', None)
+        return self._config.get('db_location', 'akin.db')
+
 
 class DataSource(object):
     def __init__(self, name, data):
@@ -37,6 +37,25 @@ class DataSource(object):
     @property
     def groups(self):
         return self._groups
+
+
+class GroupData(NamedTuple):
+    data_source: DataSource
+    field: str
+    lsh: MinHashLSH
+    values: str
+
+
+class GroupTemplate(NamedTuple):
+    name: str
+    description: str
+    index_type: str
+    threshold: float
+    case_sensitive: bool
+    use_shingles: bool
+    shingle_length: int
+    num_permutations: int
+
 
 class Akin(object):
     def __init__(self, path_to_settings):
@@ -107,7 +126,7 @@ class Akin(object):
         return True, 'Successfully deleted datasource'
 
     def _get_db_cursor(self):
-        db_file = self._settings.dblocation if self._settings.dblocation else 'akin.db'
+        db_file = self._settings.dblocation
         _conn = sqlite3.connect(db_file)
         return _conn.cursor(), _conn
 
@@ -217,14 +236,16 @@ class Akin(object):
 
         return field_hash, lsh, all_groups
 
+
 def export_group(group_data):
     filename = group_data.field + '.txt'
     with open(filename, 'w') as f:
         for lg in [g for g in group_data.values if len(g)>1]:
             f.write(str([[gv for gk, gv in g.items() if not gk.startswith('_')] for g in lg]) + '\n')
 
+
 if __name__ == "__main__":
-    akin = Akin('brand_settings.json')
+    akin = Akin('brand_settings.yml')
     akin.initialize()
 
 #c.execute('''CREATE TABLE group_values (data_source_name text, group_name text, lsh blob, group_values blob)''')
