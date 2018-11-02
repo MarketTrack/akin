@@ -20,11 +20,24 @@ def record(setup_state: BlueprintSetupState):
         raise InitializationError(f"missing option: {e}")
 
 
-@blueprint.route('/')
 @blueprint.route('/index')
+@blueprint.route('/')
 def index():
     from flask import render_template
     return render_template('home.html.j2', akin=_akin)
+
+
+@blueprint.route('/query', methods = ['GET', 'POST'])
+def query():
+    if request.method == 'GET':
+        from flask import render_template
+        return render_template('query.html.j2', akin=_akin)
+    else:
+        datasource_name = request.json.get('datasource_name')
+        group_names = request.json.get('group_names')
+        query = request.json.get('query')
+
+        return jsonify(_akin.query_group(datasource_name, group_names, query))
 
 
 @blueprint.route('/delete_datasource')

@@ -40,7 +40,7 @@ class DataSource(object):
 
 
 class GroupData(NamedTuple):
-    data_source: DataSource
+    data_source: str
     field: str
     lsh: MinHashLSH
     values: str
@@ -92,7 +92,9 @@ class Akin(object):
         return groups
 
     def add_grouptemplate(self, group_template: GroupTemplate) -> Tuple[bool, str]:
-        if self.grouptemplates.get(group_template.name):
+        try:
+            self.grouptemplates[group_template.name] = group_template
+        except KeyError:
             return False, f'Data source with the name "{group_template.name}" already exists'
         db_cursor, conn = self._get_db_cursor()
         db_cursor.execute('''INSERT INTO group_templates VALUES (?,?,?,?,?,?,?,?)''', \
@@ -128,16 +130,47 @@ class Akin(object):
         conn.close()
         return True, 'Successfully deleted datasource'
 
+    def query_group(self, datasource_name: str, group_names: Iterable[str], query: str):
+        datasource = self.datasources[datasource_name]
+        groups = (datasource.groups.get(group_name) for group_name in group_names)
+        groups = (group for group in groups if group)
+
+        results = {'headers': ['field'] + [h for h in datasource.data[0].keys()], 'data': []}
+        for group in groups:
+            group_template = self._decode_groupid(group.field)
+            query_hash = MinHash(num_perm=group_template.num_permutations)
+            if not group_template.case_sensitive:
+                query = query.lower()
+            shingle_length = group_template.shingle_length
+            if group_template.use_shingles:
+                if len(query) > shingle_length:
+                    for w in [query[i:i + shingle_length] for i in range(len(query) - shingle_length + 1)]:
+                        query_hash.update(w.encode('utf8'))
+                else:
+                    query_hash.update(query.encode('utf8'))
+            else:
+                for w in query.split():
+                    query_hash.update(w.encode('utf8'))
+            group_results = [[str(group.field)] + gr for gr in [list(datasource.data[i].values()) for i in group.lsh.query(query_hash)]]
+            results['data'].extend(group_results)
+        return results
+        
+
     def _get_db_cursor(self) -> Tuple[sqlite3.Cursor, sqlite3.Connection]:
         db_file = self._settings.dblocation
         connection = sqlite3.connect(db_file)
         return connection.cursor(), connection
 
     def initialize(self):
+        import time
+
         db_cursor, conn = self._get_db_cursor()
 
         # Shrink the database
+        vacuum_begin = time.monotonic()
+        _log.info('Vacuuming database "%s"...', self._settings.dblocation)
         db_cursor.execute('''VACUUM''')
+        _log.info('Vacuum completed in %.2fs.', time.monotonic() - vacuum_begin)
 
         # Ensure that the necessary tables exist
         db_cursor.execute('''CREATE TABLE IF NOT EXISTS data_sources (data_source_name text PRIMARY KEY, data blob);''')
@@ -150,9 +183,12 @@ class Akin(object):
         conn.commit()
 
         for data_source_name, data_raw in db_cursor.execute('''SELECT data_source_name, data FROM data_sources'''):
+            _log.info('Loading data for datasource "%s"...', data_source_name)
+            load_begin = time.monotonic()
             data = pickle.loads(data_raw)
             db_ds = DataSource(data_source_name, data)
             self.datasources[data_source_name] = db_ds
+            _log.info('Loaded %s row(s) of data for datasource "%s" in %.2fs.', len(data), data_source_name, time.monotonic() - load_begin)
 
         for data_source_name, group_name, lsh_raw, group_values_raw in db_cursor.execute('''SELECT data_source_name, group_name, lsh, group_values FROM group_values'''):
             group_values = pickle.loads(group_values_raw)
@@ -160,8 +196,9 @@ class Akin(object):
             loaded_group = GroupData(data_source=data_source_name, field=group_name, lsh=lsh, values=group_values)
             if data_source_name in self.datasources:
                 self.datasources[data_source_name].groups[loaded_group.field] = loaded_group
+                _log.info('Loaded group "%s" for datasource "%s".', group_name, data_source_name)
             else:
-                _log.warn('Initialize skipped unknown datasource "%s".', data_source_name)
+                _log.warn('Load groups failed for unknown datasource "%s".', data_source_name)
 
         for template_name, description, index_type, threshold, case_sensitive, use_shingles, shingle_length, num_permutations in db_cursor.execute('''SELECT * FROM group_templates'''):
             self._grouptemplates[template_name] = GroupTemplate(name=template_name, description=description, index_type=index_type,
@@ -177,9 +214,14 @@ class Akin(object):
             default_grouptemplate_95_s = GroupTemplate(name="Default 0.95 Shingled 3", description="Use MinHashLSH with shingling to find groups with a Jaccard similarity of 0.95.",
                                                   index_type="minhashlsh", threshold=0.95, case_sensitive=0, use_shingles=1, shingle_length=3,
                                                   num_permutations=128)
+            default_grouptemplate_80_s = GroupTemplate(name="Default 0.80 Shingled 3", description="Use MinHashLSH with shingling to find groups with a Jaccard similarity of 0.80.",
+                                                  index_type="minhashlsh", threshold=0.80, case_sensitive=0, use_shingles=1, shingle_length=3,
+                                                  num_permutations=128)
             self.add_grouptemplate(default_grouptemplate)
             self.add_grouptemplate(default_grouptemplate_90)
             self.add_grouptemplate(default_grouptemplate_95_s)
+            self.add_grouptemplate(default_grouptemplate_80_s)
+        _log.info('Loaded %s group template(s): %s', len(self.grouptemplates), ", ".join(self.grouptemplates))
 
         conn.close()
 
@@ -195,6 +237,27 @@ class Akin(object):
         field_hash = '_'.join([field, index_type, str(threshold), str(num_perm), shingle_marker])
         field_hash = '__' + field_hash # Use a double underscore to denote that this is a system field
         return field_hash
+
+    @staticmethod
+    def _decode_groupid(field: str) -> GroupTemplate:
+        if not field.startswith('__'):
+            raise ValueError(f'unsupported field: {field}')
+        
+        field, index_type, threshold, num_perm, shingle_marker = field[2:].rsplit("_", 4)
+
+        use_shingles = int(shingle_marker[0])
+        shingle_length = int(shingle_marker[1:]) if use_shingles else 0
+        group_template = GroupTemplate(
+            name=field,
+            description='',
+            index_type=index_type,
+            threshold=float(threshold),
+            case_sensitive=0,
+            use_shingles=use_shingles,
+            shingle_length=shingle_length,
+            num_permutations=int(num_perm))
+
+        return group_template
 
     @staticmethod
     def _index_field(data_source, field, group_settings: GroupTemplate):

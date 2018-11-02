@@ -1,0 +1,210 @@
+{% extends "layout.html.j2" %}
+{% block head %}
+<style rel="stylesheet" type="text/css">
+#query_form { overflow: auto; }
+#query_form fieldset { width: 30%; display: block; }
+#query_line { text-align: center; font-size: 1.5em; }
+</style>
+{% endblock %}
+{% block body %}
+<script>
+function update_datasets(select_element, endpoint) {
+  $.getJSON(
+    endpoint,
+    function(data) {
+      select_element.find('option').remove();
+
+      $.each(data, function(index, datasource_name) {  
+        select_element.append(
+          $('<option>', {
+            'value': datasource_name,
+            text: datasource_name,
+          })
+        );
+      });
+
+      select_element.trigger('change');
+    }
+  );
+}
+function update_options() {
+  if (this.value !== '') {
+    update_fieldset($('#fields'), '/get_groups/' + this.value);
+  }
+}
+function update_fieldset(fieldset, endpoint) {
+  $.getJSON(
+    endpoint,
+    function(data) {
+      fieldset.find('div').remove();
+
+      $.each(data, function(index, group) {
+        new_field = $('<div>');
+        new_field.append(
+          $('<input>', {
+            'type': 'checkbox',
+            'id': group,
+            val: group,
+          }),
+          $('<label>', {
+            'for': group,
+            text: group,
+          })
+        );
+        fieldset.append(new_field);
+      });
+    }
+  );
+}
+function query(e) {	 
+  e.preventDefault();
+  var query_data = {
+    'datasource_name': $('#datasets').val(),
+    'query': $('#query').val(),
+    'group_names': $('#fields').find('input[type="checkbox"]:checked').map(function() { return $(this).val() }).get()
+  };
+  $.ajax({
+    url: '{{ url_for("ui.query") }}',
+    type: 'POST',
+    contentType: 'application/json; charset=utf-8',
+    dataType: 'json',
+    data: JSON.stringify(query_data),
+    async: true,
+    cache: false,
+    processData: false,
+    success: function (result) {
+      console.log(result);
+      var group_index = 0;
+      var my_columns = [];
+      $.each(result.headers, function (index, header) {
+        var my_item = {};
+        my_item.data = index;
+        my_item.title = header;
+        my_columns.push(my_item);
+        if (header.match('group_id$')) {
+          group_index = index;
+        }
+      });
+      var table = $('#datasource').DataTable();
+      table.destroy();
+      $('#datasource').empty()
+      table = $('#datasource').DataTable({
+        data: result.data,
+        columns: my_columns,
+        iDisplayLength: 50,
+        order: [[group_index, 'asc']],
+        dom: "<'row'<'col-sm-3'l><'col-sm-3'f><'col-sm-6'p>>" +
+          "<'row'<'col-sm-12'tr>>" +
+          "<'row'<'col-sm-5'i><'col-sm-7'p>>",
+        rowGroup: { dataSrc: group_index },
+      });
+
+      table.columns().every(function () {
+        var col = this;
+        if ($(col.header()).html().match('^_') || 
+            $(col.header()).html().match('group_id$')) {
+          col.visible(false);
+        }
+      });
+
+      $('#groupings_section').show();
+    },
+    error: function (result) {
+      console.log(result);
+      $('#groupings_section').hide();
+      notify("Failed to load group data.");
+    }
+  });
+}
+$(document).ready(function() {
+  datasets = $('#datasets');
+  datasets.change(update_options);
+  update_datasets(datasets, '/get_datasets');
+  $("#query_form").submit(query);
+});
+</script>
+
+<section>
+  <h1>Query</h1>
+  <form id="query_form">
+    <div id="query_line">
+      <label for="datasets">Dataset:</label>
+      <select id="datasets" name="datasets"></select>
+      <label for="query">Query:</label>
+      <input type="text" id="query" name="query" style="width: auto">
+      <input type="submit" value="Query">
+    </div>
+
+    <fieldset id="fields">
+      <legend>Fields</legend>
+      <div>No fields available.</div>
+    </fieldset>
+  </form>
+</section>
+
+<section id="groupings_section" style="display: none">
+  <h2>Groupings</h2>
+  <table id="datasource" class="display compact" style="overflow-x: auto" width="100%">
+    <thead>
+      <tr>
+        <th>No columns</th>
+      </tr>
+    </thead>
+  </table>
+</section>
+
+<script>  
+$("#view_group").click(function (e) {
+  e.preventDefault();
+  $.ajax({
+    url: "/get_group_data",
+    data: {
+      id: $(this).val(), // < note use of 'this' here
+      dataset: $("#dataset").val(),
+      group: $("#group").val()
+    },
+    dataType: 'json',
+    success: function (result) {
+      var group_index = 0;
+      var my_columns = [];
+      $.each(result.headers, function (index, header) {
+        var my_item = {};
+        my_item.data = index;
+        my_item.title = header;
+        my_columns.push(my_item);
+        if (header.match('group_id$')) {
+          group_index = index;
+        }
+      });
+      var table = $('#datasource').DataTable();
+      table.destroy();
+      $('#datasource').empty()
+      table = $('#datasource').DataTable({
+        data: result.data,
+        columns: my_columns,
+        iDisplayLength: 50,
+        order: [[group_index, 'asc']],
+        dom: "<'row'<'col-sm-3'l><'col-sm-3'f><'col-sm-6'p>>" +
+          "<'row'<'col-sm-12'tr>>" +
+          "<'row'<'col-sm-5'i><'col-sm-7'p>>",
+        rowGroup: { dataSrc: group_index },
+      });
+
+      table.columns().every(function () {
+        var col = this;
+        if ($(col.header()).html().match('^_') || 
+            $(col.header()).html().match('group_id$')) {
+          col.visible(false);
+        }
+      });
+
+      $('#groupings_section').show();
+    },
+    error: function (result) {
+      $('#groupings_section').hide();
+      notify("Failed to load group data.");
+    }
+  });
+});
+</script>
+{% endblock %}
