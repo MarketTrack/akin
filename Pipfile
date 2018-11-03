@@ -8,6 +8,7 @@ weighted-levenshtein = "*"
 datasketch = "*"
 flask = "*"
 pyyaml = "*"
+numpy = "*"
 
 [dev-packages]
 pylint = "*"

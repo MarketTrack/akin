@@ -202,13 +202,20 @@ class Akin(object):
         return field_hash
 
     @staticmethod
+    def chunker_list(seq, size):
+        return (seq[i::size] for i in range(size))
+
+    @staticmethod
+    def chunks(l, n):
+        """Yield successive n-sized chunks from l."""
+        for i in range(0, len(l), n):
+            yield l[i:i + n]
+
+    @staticmethod
     def _index_field(data_source, field, group_settings: GroupTemplate):
-        force_rehash = False
 
         index_type = group_settings.index_type
         threshold = group_settings.threshold
-        use_shingles = group_settings.use_shingles
-        shingle_len = group_settings.shingle_length
         num_perm = group_settings.num_permutations
 
         if index_type != 'minhashlsh':
@@ -216,8 +223,141 @@ class Akin(object):
 
         field_hash = Akin._generate_groupid(field, group_settings)
         field_hash_len = field_hash + '_len'
+
+        from multiprocessing import Process, Manager
+        manager = Manager()
+        return_dict = manager.dict()
+        jobs = []
+        
+        import time
+        start_time = time.time()
+
+        num_processes = 8
+        import numpy
+        data_chunks = numpy.array_split(data_source.data, num_processes)
+        num_entries = 0
+        for proc_num, data_chunk in enumerate(data_chunks):
+            p = Process(target=Akin.generate_minhash_lsh, args=(proc_num, data_chunk, num_entries, field, field_hash, field_hash_len, group_settings, return_dict))
+            num_entries += len(data_chunk)
+            jobs.append(p)
+            p.start()
+        
+        for proc in jobs:
+            proc.join()
+
         lsh = MinHashLSH(threshold, num_perm)
-        for i, entry in enumerate(data_source.data):
+        minhashes = dict()
+        minhashsetlengths = dict()
+        for proc_num in range(0, len(return_dict)):
+            for row_id, minhash, minhashsetlength in return_dict[proc_num]:
+                minhashes[row_id] = minhash
+                minhashsetlengths[row_id] = minhashsetlength
+                lsh.insert(row_id, minhash)
+
+        _log.info(f'Time to create minhashes: {time.time() - start_time}')
+        start_time = time.time()
+
+        # lsh = MinHashLSH(threshold, num_perm)
+        # for i, entry in enumerate(data_source.data):
+        #     if force_rehash or field_hash not in entry:
+        #         min_hash = MinHash(num_perm)
+        #         field_value = entry[field].lower()
+        #         set_len = 0
+        #         if use_shingles:
+        #             if len(field_value) > shingle_len:
+        #                 for w in [field_value[i:i + shingle_len] for i in range(len(field_value) - shingle_len + 1)]:
+        #                     min_hash.update(w.encode('utf8'))
+        #                     set_len += 1
+        #         else:
+        #             for w in field_value.split():
+        #                 min_hash.update(w.encode('utf8'))
+        #                 set_len += 1
+        #         entry[field_hash] = min_hash
+        #         entry[field_hash_len] = set_len
+        #     lsh.insert(i, entry[field_hash])
+
+        return_dict = manager.dict()
+        jobs = []
+        num_entries = 0
+        for proc_num, data_chunk in enumerate(data_chunks):
+            p = Process(target=Akin._group_data, args=(proc_num, lsh, data_source.data, data_chunk, num_entries, field, minhashes, minhashsetlengths, return_dict))
+            num_entries += len(data_chunk)
+            jobs.append(p)
+            p.start()
+        
+        for proc in jobs:
+            proc.join()
+
+        all_groups = list()
+        for proc_num in range(0, len(return_dict)):
+            for groups in return_dict.values():
+                all_groups.append(groups)
+
+        _log.info(f'Time to group: {time.time() - start_time}')
+
+        # all_groups = list()
+        # unseen_indices = [1] * len(data_source.data)
+        # for i, _ in enumerate(data_source.data):
+        #     if unseen_indices[i] == 0 or minhashsetlengths[i] == 0:
+        #         continue
+        #     potential_group = list()
+        #     for j in lsh.query(minhashes[i]):
+        #         potential_group.append(data_source.data[j])
+        #         unseen_indices[j] = 0
+        #     if len(potential_group) > 1:
+        #         group_differs_internally = False
+        #         for group_item_index, group_item in enumerate(potential_group):
+        #             item_value = group_item[field]
+        #             other_item_values = [gitem[field] for gitemindex, gitem in enumerate(potential_group) if gitemindex != group_item_index]
+        #             group_item.distances = Akin.calculate_lev_distances(item_value, other_item_values, lev)
+        #             if group_item.distances:
+        #                 group_item.distances_avg = sum(group_item.distances) / len(group_item.distances)
+        #                 if group_item.distances_avg > 0:
+        #                     group_differs_internally = True
+        #         if group_differs_internally:
+        #             all_groups.append(potential_group)
+
+        return field_hash, lsh, all_groups
+
+    @staticmethod
+    def _group_data(proc_num, lsh, data, data_chunk, num_entries, field, minhashes, minhashsetlengths, return_dict):
+        # all_groups = list()
+        unseen_indices = [1] * len(data)
+        for i, _ in enumerate(data_chunk):
+            if unseen_indices[i+num_entries] == 0 or minhashsetlengths[i] == 0:
+                continue
+            potential_group = list()
+            lowest_match = len(minhashes) + 1
+            for j in lsh.query(minhashes[i+num_entries]):
+                lowest_match = j if j < lowest_match else lowest_match
+                potential_group.append(data[j])
+                unseen_indices[j] = 0
+            if len(potential_group) > 1:
+                group_differs_internally = False
+                for group_item_index, group_item in enumerate(potential_group):
+                    item_value = group_item[field]
+                    other_item_values = [gitem[field] for gitemindex, gitem in enumerate(potential_group) if gitemindex != group_item_index]
+                    group_item.distances = Akin.calculate_lev_distances(item_value, other_item_values, lev)
+                    if group_item.distances:
+                        group_item.distances_avg = sum(group_item.distances) / len(group_item.distances)
+                        if group_item.distances_avg > 0:
+                            group_differs_internally = True
+                if group_differs_internally:
+                    return_dict[lowest_match] = potential_group
+                    # all_groups.append(potential_group)
+        
+        # return_dict[proc_num] = all_groups
+
+    @staticmethod
+    def generate_minhash_lsh(proc_num, data, data_start_idx, field, field_hash, field_hash_len, group_settings: GroupTemplate, return_dict):
+        force_rehash = False
+
+        use_shingles = group_settings.use_shingles
+        shingle_len = group_settings.shingle_length
+        num_perm = group_settings.num_permutations
+
+        row_and_minhashes = list()
+        for i, entry in enumerate(data):
             if force_rehash or field_hash not in entry:
                 min_hash = MinHash(num_perm)
                 field_value = entry[field].lower()
@@ -233,31 +373,9 @@ class Akin(object):
                         set_len += 1
                 entry[field_hash] = min_hash
                 entry[field_hash_len] = set_len
-            lsh.insert(i, entry[field_hash])
-
-        all_groups = list()
-        unseen_indices = [1] * len(data_source.data)
-        for i, entry in enumerate(data_source.data):
-            if unseen_indices[i] == 0 or entry[field_hash_len] == 0:
-                continue
-            potential_group = list()
-            for j in lsh.query(entry[field_hash]):
-                potential_group.append(data_source.data[j])
-                unseen_indices[j] = 0
-            if len(potential_group) > 1:
-                group_differs_internally = False
-                for group_item_index, group_item in enumerate(potential_group):
-                    item_value = group_item[field]
-                    other_item_values = [gitem[field] for gitemindex, gitem in enumerate(potential_group) if gitemindex != group_item_index]
-                    group_item.distances = Akin.calculate_lev_distances(item_value, other_item_values, lev)
-                    if group_item.distances:
-                        group_item.distances_avg = sum(group_item.distances) / len(group_item.distances)
-                        if group_item.distances_avg > 0:
-                            group_differs_internally = True
-                if group_differs_internally:
-                    all_groups.append(potential_group)
-
-        return field_hash, lsh, all_groups
+            row_and_minhashes.append((i+data_start_idx, min_hash, set_len))
+        
+        return_dict[proc_num] = row_and_minhashes
 
     @staticmethod
     def get_distance_methods() -> dict:
