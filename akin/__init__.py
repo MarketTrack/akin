@@ -229,6 +229,7 @@ class Akin(object):
         return_dict = manager.dict()
         jobs = []
         
+        _log.info('Starting minhashing...')
         import time
         start_time = time.time()
 
@@ -333,6 +334,9 @@ class Akin(object):
                 potential_group.append(data[j])
                 unseen_indices[j] = 0
             if len(potential_group) > 1:
+                if lowest_match in return_dict: # Already done by another process
+                    continue
+                return_dict[lowest_match] = True # Placeholder.
                 group_differs_internally = False
                 for group_item_index, group_item in enumerate(potential_group):
                     item_value = group_item[field]
@@ -386,7 +390,7 @@ class Akin(object):
         try:
             return [method(value, i) for i in values]
         except Exception as e:
-            _log.exception(e)
+            _log.info(f'Bad value: {value}')
         return None
 
     @staticmethod
