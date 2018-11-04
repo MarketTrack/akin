@@ -1,99 +1,107 @@
 {% extends "layout.html.j2" %}
 {% block body %}
-  <script>
-      function reload_combobox(combobox, endpoint) {
-        // Remove old options
-        combobox.find('option').remove();                                
+<script>
+function reload_combobox(combobox, endpoint) {
+  // Remove old options
+  combobox.find('option').remove();                                
 
-        $.getJSON(
-          endpoint,
-          function(data) {
-            $.each(data, function(index, val) {  
-              var option_item = '<option value="' + val + '">' + val + '</option>'
-              combobox.append(option_item);
-            });
-          }
-        );
-      }
-      function reload_datasets() {
-        $.ajaxSetup({ async: false });
-        reload_combobox($('#dataset'),'/get_datasets')
-        $.ajaxSetup({ async: true });
-        $('#dataset').trigger("change");
-      }
-      function reload_groups() {
-        var dataset = $('#dataset').val();
-        reload_combobox($('#group'), '/get_groups' + '/' + dataset)
-      }
-      function reload_fields() {
-        var dataset = $('#dataset').val();
-        reload_combobox($('#field'), '/get_fields' + '/' + dataset)
-      }
-
-      $(document).ready(function() {
-        $('#dataset').change(function() {
-          reload_fields()
-          reload_groups()
-        });
-        reload_datasets()
+  $.getJSON(
+    endpoint,
+    function(data) {
+      $.each(data, function(index, val) {  
+        var option_item = '<option value="' + val + '">' + val + '</option>';
+        combobox.append(option_item);
       });
-    </script>
-      <dl>
-            <dt>
-          Available datasets:
-            <dd>
-            <select id="dataset" name="dataset">
-            </select>
-            <input type="button" id="delete_datasource" style="width: 200px" value="Delete Datasource" /></dd>
-          </dd>
-            <dd>
-              Dataset groups:
-              <select id="group" name="group">
-              </select>            
-            </dd>
-            <dd>
-              <input type="button" id="view_group" style="width: 200px" value="View Group" /></dd>
-
-            <dd>
-              Dataset fields:
-              <select id="field" name="field">
-              </select>            
-            </dd>
-            <dd>
-              Group templates:
-              <select id="group_template" name="group_template">
-                  {% for name, template in akin.grouptemplates.items() %}
-                    <option value="{{ name }}" SELECTED>{{ name }}</option>
-                  {% endfor %}
-              </select>
-            </dd>
-            <dd><input type="button" id="create_group" style="width: 200px" value="Perform Grouping" /></dd>
-        </dt>
-          <form id="upload_datasource" class="uploadfile">
-          Add a csv file:
-            <dd><input type="file" name="file" style="width: auto" /></dd>
-            <dd><input type="submit"/></dd>
-          </form>
-      </dl>
-    <ul class=entries>
-        <table id="datasource" class="display compact" width="100%">
-            <thead>
-              <tr>
-                <th>No columns</th>
-              </tr>
-            </thead>
-        </table>
-    </ul>
-
-    <script>
-function notify(response) {
-  if (response) {
-    var notification = $('#notification');
-    notification.text(response)
-    notification.show();
-  }
+    }
+  );
+}
+function reload_datasets() {
+  $.ajaxSetup({ async: false });
+  reload_combobox($('#dataset'),'/get_datasets');
+  $.ajaxSetup({ async: true });
+  $('#dataset').trigger("change");
+}
+function reload_groups() {
+  var dataset = $('#dataset').val();
+  reload_combobox($('#group'), '/get_groups' + '/' + dataset);
+}
+function reload_fields() {
+  var dataset = $('#dataset').val();
+  reload_combobox($('#field'), '/get_fields' + '/' + dataset);
 }
 
+$(document).ready(function() {
+  $('#dataset').change(function() {
+    reload_fields();
+    reload_groups();
+  });
+  reload_datasets();
+});
+</script>
+
+<section>
+  <h1>Manage</h1>
+  <div>
+    <h2>Available datasets</h2>
+    <form>
+      <div>
+        <label for="dataset">Dataset:</label>
+        <select id="dataset" name="dataset"></select>
+        <input type="button" id="delete_datasource" style="width: 200px" value="Delete Datasource">
+      <div>
+    </form>
+
+    <h3>Available groups</h3>
+    <form>
+      <div>
+        <label for="group">Group:</label>
+        <select id="group" name="group"></select>
+        <input type="button" id="view_group" style="width: 200px" value="View Group">
+      </div>
+    </form>
+
+    <h3>Add group</h3>
+    <form>
+      <div>
+        <label for="field">Field:</label>
+        <select id="field" name="field"></select>
+      </div>
+      <div>
+        <label for="group_template">Group template:</label>
+        <select id="group_template" name="group_template">
+        {% for name, template in akin.grouptemplates.items() %}
+          <option value="{{ name }}" SELECTED>{{ name }}</option>
+        {% endfor %}
+        </select>
+      </div>
+      <input type="button" id="create_group" style="width: 200px" value="Perform Grouping">
+    </form>
+  </div>
+
+  <div style="margin-top: 1em">
+    <h2>Add dataset</h2>
+    <form id="upload_datasource" class="uploadfile">
+      <div>
+        <label for="file">CSV file:</label>
+        <input type="file" name="file" style="width: auto">
+      </div>
+      <input type="submit"/>
+    </form>
+  </div>
+</section>
+
+<section id="groupings_section" style="display: none">
+  <h2>Groupings</h2>
+  <table id="datasource" class="display compact" style="overflow-x: auto" width="100%">
+    <thead>
+      <tr>
+        <th>No columns</th>
+      </tr>
+    </thead>
+  </table>
+</section>
+
+<script>
 $("#upload_datasource").submit(function(e) {	 
   e.preventDefault();
   var formData = new FormData($(this)[0]);
@@ -166,7 +174,6 @@ $("#view_group").click(function (e) {
     },
     dataType: 'json',
     success: function (result) {
-
       var group_index = 0;
       var my_columns = [];
       $.each(result.headers, function (index, header) {
@@ -175,11 +182,11 @@ $("#view_group").click(function (e) {
         my_item.title = header;
         my_columns.push(my_item);
         if (header.match('group_id$')) {
-          group_index = index
+          group_index = index;
         }
       });
       var table = $('#datasource').DataTable();
-      table.destroy()
+      table.destroy();
       $('#datasource').empty()
       // if (typeof table.destroy === 'function') {
       //   table.destroy()
@@ -199,13 +206,17 @@ $("#view_group").click(function (e) {
         var col = this;
         if ($(col.header()).html().match('^_') || 
             $(col.header()).html().match('group_id$')) {
-          col.visible(false)
+          col.visible(false);
         }
       });
+
+      $('#groupings_section').show();
     },
     error: function (result) {
+      $('#groupings_section').hide();
+      notify("Failed to load group data.");
     }
   });
 });
-     </script>
+</script>
 {% endblock %}
