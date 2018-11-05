@@ -21,7 +21,10 @@ def create_app():
     except FileNotFoundError as e:
         log.warning('Log configuration skipped; missing configuration file: %s', e.filename)
 
+    app.jinja_env.trim_blocks = True
+    app.jinja_env.lstrip_blocks = True
     app.secret_key = f'{__file__}:{__version__}'
+
     with app.open_instance_resource('service.yml') as configuration_file:
         app.config.from_mapping(safe_load(configuration_file))
 

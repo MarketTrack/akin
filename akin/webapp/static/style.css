@@ -1,22 +1,32 @@
-body            { font-family: sans-serif; background: #eee; }
-header h1       { font-size: 1.75em; border-bottom: 2px solid #eee; }
-a, h1, h2       { color: #377ba8; }
-h1, h2, h3      { font-family: 'Georgia', serif; margin: 0; }
-h1              { font-size: 1.4em; }
-h2              { font-size: 1.15em; margin: 0.75em 0 0.5em; }
-h3              { font-size: 1.0em; margin: 0.5em 0 0.5em; color: #5facd3; }
+@import url('https://fonts.googleapis.com/css?family=Lato|Merriweather');
 
-.page           { margin: 2em auto; width: 90%; border: 5px solid #ccc;
-                  padding: 0.8em; background: white; }
+html            { margin: 0; padding: 0; color: #000; background: #eee; }
+body            { width: 90%; margin: 2em auto; padding: 0.8em;
+                  border: 5px solid #ccc;
+                  font-size: 14px; font-family: 'Lato', sans-serif;
+                  color: #000;  background: #fff; }
+
+header h1       { font-size: 1.75em; border-bottom: 2px solid #eee; }
+
+nav             { text-align: right; font-size: 1.25em; padding: 0.25em;
+                  margin-bottom: 1em; background: #fafafa; }
+nav ul          { margin: 0; padding: 0; list-style-type: none; }
+nav ul li       { margin: 0; padding: 0; display: inline-block; }
+nav ul li a     { margin: 0; padding: 0.25em; text-decoration: none; font-weight: bold; }
+
+h1, h2, h3, a   { color: #377ba8; }
+h1, h2, h3, h4  { font-family: 'Merriweather', serif; margin: 0; }
+h1              { font-size: 1.75em; }
+h2              { font-size: 1.4em; border-bottom: 1px solid #eee; }
+h3              { font-size: 1.15em; margin: 0.75em 0 0.5em; }
+h4              { font-size: 1.0em; margin: 0.5em 0 0.5em; color: #5facd3; }
+
 .entries        { list-style: none; margin: 0; padding: 0; }
 .entries li     { margin: 0.8em 1.2em; }
 .entries li h2  { margin-left: -1em; }
-.uploadfile     { font-size: 0.9em; }
-.uploadfile dl  { font-weight: bold; }
-.metanav        { text-align: right; font-size: 1em; padding: 0.3em;
-                  margin-bottom: 1em; background: #fafafa; }
 .flash          { background: #cee5F5; padding: 0.5em;
                   border: 1px solid #aacbe2; }
 .error          { background: #f0d6d6; padding: 0.5em; }
 
 form > div      { margin: 0.25em 0; }
+form label      { font-weight: bold; }

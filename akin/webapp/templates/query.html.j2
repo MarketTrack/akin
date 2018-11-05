@@ -1,9 +1,11 @@
 {% extends "layout.html.j2" %}
 {% block head %}
-<style rel="stylesheet" type="text/css">
-#query_form { overflow: auto; }
-#query_form fieldset { width: 30%; display: block; }
-#query_line { text-align: center; font-size: 1.5em; }
+<style rel="stylesheet">
+form                 { margin-top: 0.75em; overflow: auto; }
+form label           { width: 7em; text-align: right; display: inline-block; }
+form > input         { margin-left: 6.9em; display: block; }
+form > fieldset      { margin-left: 7.2em; width: 30%; display: block; }
+#datasource_wrapper  { margin-top: 1em; width: 100%; }
 </style>
 {% endblock %}
 {% block body %}
@@ -92,6 +94,7 @@ function query(e) {
         data: result.data,
         columns: my_columns,
         iDisplayLength: 50,
+        scrollX: true,
         order: [[group_index, 'asc']],
         dom: "<'row'<'col-sm-3'l><'col-sm-3'f><'col-sm-6'p>>" +
           "<'row'<'col-sm-12'tr>>" +
@@ -125,13 +128,15 @@ $(document).ready(function() {
 </script>
 
 <section>
-  <h1>Query</h1>
+  <h2>Query</h2>
   <form id="query_form">
-    <div id="query_line">
+    <div>
       <label for="datasets">Dataset:</label>
-      <select id="datasets" name="datasets"></select>
+      <select id="datasets" name="datasets" style="min-width: 22em"></select>
+    </div>
+    <div>
       <label for="query">Query:</label>
-      <input type="text" id="query" name="query" style="width: auto">
+      <input type="text" id="query" name="query" style="min-width: 26em">
       <input type="submit" value="Query">
     </div>
 
@@ -143,68 +148,13 @@ $(document).ready(function() {
 </section>
 
 <section id="groupings_section" style="display: none">
-  <h2>Groupings</h2>
-  <table id="datasource" class="display compact" style="overflow-x: auto" width="100%">
+  <h2>Results</h2>
+  <table id="datasource" class="display compact">
     <thead>
       <tr>
-        <th>No columns</th>
+        <th>No columns.</th>
       </tr>
     </thead>
   </table>
 </section>
-
-<script>  
-$("#view_group").click(function (e) {
-  e.preventDefault();
-  $.ajax({
-    url: "/get_group_data",
-    data: {
-      id: $(this).val(), // < note use of 'this' here
-      dataset: $("#dataset").val(),
-      group: $("#group").val()
-    },
-    dataType: 'json',
-    success: function (result) {
-      var group_index = 0;
-      var my_columns = [];
-      $.each(result.headers, function (index, header) {
-        var my_item = {};
-        my_item.data = index;
-        my_item.title = header;
-        my_columns.push(my_item);
-        if (header.match('group_id$')) {
-          group_index = index;
-        }
-      });
-      var table = $('#datasource').DataTable();
-      table.destroy();
-      $('#datasource').empty()
-      table = $('#datasource').DataTable({
-        data: result.data,
-        columns: my_columns,
-        iDisplayLength: 50,
-        order: [[group_index, 'asc']],
-        dom: "<'row'<'col-sm-3'l><'col-sm-3'f><'col-sm-6'p>>" +
-          "<'row'<'col-sm-12'tr>>" +
-          "<'row'<'col-sm-5'i><'col-sm-7'p>>",
-        rowGroup: { dataSrc: group_index },
-      });
-
-      table.columns().every(function () {
-        var col = this;
-        if ($(col.header()).html().match('^_') || 
-            $(col.header()).html().match('group_id$')) {
-          col.visible(false);
-        }
-      });
-
-      $('#groupings_section').show();
-    },
-    error: function (result) {
-      $('#groupings_section').hide();
-      notify("Failed to load group data.");
-    }
-  });
-});
-</script>
 {% endblock %}

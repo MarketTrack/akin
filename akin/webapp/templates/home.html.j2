@@ -1,4 +1,11 @@
 {% extends "layout.html.j2" %}
+{% block head %}
+<style rel="stylesheet">
+form label           { width: 10em; text-align: right; display: inline-block; }
+form > input         { margin-left: 9.75em; display: block; }
+#datasource_wrapper  { margin-top: 1em; width: 100%; }
+</style>
+{% endblock %}
 {% block body %}
 <script>
 function reload_combobox(combobox, endpoint) {
@@ -40,27 +47,27 @@ $(document).ready(function() {
 </script>
 
 <section>
-  <h1>Manage</h1>
+  <h2>Manage</h2>
   <div>
-    <h2>Available datasets</h2>
+    <h3>Available datasets</h3>
     <form>
       <div>
         <label for="dataset">Dataset:</label>
-        <select id="dataset" name="dataset"></select>
-        <input type="button" id="delete_datasource" style="width: 200px" value="Delete Datasource">
-      <div>
-    </form>
-
-    <h3>Available groups</h3>
-    <form>
-      <div>
-        <label for="group">Group:</label>
-        <select id="group" name="group"></select>
-        <input type="button" id="view_group" style="width: 200px" value="View Group">
+        <select id="dataset" name="dataset" style="min-width: 22em"></select>
+        <input type="button" id="delete_datasource" value="Delete" style="width: 8em;">
       </div>
     </form>
 
-    <h3>Add group</h3>
+    <h4>Available groups</h4>
+    <form>
+      <div>
+        <label for="group">Group:</label>
+        <select id="group" name="group" style="min-width: 22em"></select>
+        <input type="button" id="view_group" value="View" style="width: 8em;">
+      </div>
+    </form>
+
+    <h4>Add group</h4>
     <form>
       <div>
         <label for="field">Field:</label>
@@ -68,34 +75,34 @@ $(document).ready(function() {
       </div>
       <div>
         <label for="group_template">Group template:</label>
-        <select id="group_template" name="group_template">
+        <select id="group_template" name="group_template" style="min-width: 15em">
         {% for name, template in akin.grouptemplates.items() %}
-          <option value="{{ name }}" SELECTED>{{ name }}</option>
+          <option value="{{ name }}"{{ ' selected' if loop.first }}>{{ name }}</option>
         {% endfor %}
         </select>
       </div>
-      <input type="button" id="create_group" style="width: 200px" value="Perform Grouping">
+      <input type="button" id="create_group" style="width: 15em" value="Perform Grouping">
     </form>
   </div>
 
   <div style="margin-top: 1em">
-    <h2>Add dataset</h2>
+    <h3>Add dataset</h3>
     <form id="upload_datasource" class="uploadfile">
       <div>
-        <label for="file">CSV file:</label>
-        <input type="file" name="file" style="width: auto">
+        <label for="file">CSV File:</label>
+        <input type="file" id="file" name="file" style="width: auto">
       </div>
-      <input type="submit"/>
+      <input type="submit" value="Upload File">
     </form>
   </div>
 </section>
 
 <section id="groupings_section" style="display: none">
   <h2>Groupings</h2>
-  <table id="datasource" class="display compact" style="overflow-x: auto" width="100%">
+  <table id="datasource" class="display compact">
     <thead>
       <tr>
-        <th>No columns</th>
+        <th>No columns.</th>
       </tr>
     </thead>
   </table>
@@ -195,6 +202,7 @@ $("#view_group").click(function (e) {
         data: result.data,
         columns: my_columns,
         iDisplayLength: 50,
+        scrollX: true,
         order: [[group_index, 'asc']],
         dom: "<'row'<'col-sm-3'l><'col-sm-3'f><'col-sm-6'p>>" +
           "<'row'<'col-sm-12'tr>>" +
