@@ -98,7 +98,7 @@ def add_template():
     case_sensitive = request.args.get('case_sensitive')
     use_shingles = request.args.get('use_shingles')
     if use_shingles == '0':
-        shingle_length = '0'
+        shingle_length = 0
     else:
         shingle_length = request.args.get('shingle_length')
     num_permutations = request.args.get('num_permutations')
@@ -108,17 +108,24 @@ def add_template():
     else:
         name = f"Custom: threshold {threshold} - case sensitive {case_sensitive} - shingle length {shingle_length} - Number of permutations {num_permutations}"
         description = f"MinHashLSH without shingling to find groups with a Jaccard similarity of {threshold}."
-    
-    new_grouptemplate = GroupTemplate(name=name,
-                                      description=description,
-                                      index_type="minhashlsh",
-                                      threshold=float(threshold),
-                                      case_sensitive=int(case_sensitive),
-                                      use_shingles=int(use_shingles),
-                                      shingle_length=int(shingle_length),
-                                      num_permutations=int(num_permutations))
-    _akin.add_grouptemplate(new_grouptemplate)
-    return jsonify({'success':True})
+
+    try:
+        threshold = float(threshold)
+    except ValueError:
+        return jsonify({'success':False})
+    else:
+        if threshold > 0 and threshold <= 1 and shingle_length.isdigit() and int(shingle_length) >= 1:
+            new_grouptemplate = GroupTemplate(name=name,
+                                              description=description,
+                                              index_type="minhashlsh",
+                                              threshold=threshold,
+                                              case_sensitive=int(case_sensitive),
+                                              use_shingles=int(use_shingles),
+                                              shingle_length=int(shingle_length),
+                                              num_permutations=int(num_permutations))
+            _akin.add_grouptemplate(new_grouptemplate)
+            return jsonify({'success':True})
+    return jsonify({'success':False})
 
 
 @blueprint.route('/get_group_data')

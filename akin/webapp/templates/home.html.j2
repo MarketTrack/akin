@@ -83,14 +83,14 @@ $(document).ready(function() {
     <h3>Add group template</h3>
     <form>
       <div>
-        Threshold (0.00 - 1.00): <input type="number" name=threshold>
+        Threshold (0.01 - 1.00): <input type="number" name=threshold min="0.01" max="1.00" required value="1.00">
         <label for="case_sensitive">Case Sensitive:</label>
-        <select id="case_sensitive" name="case_sensitive"><option value=1>True</option><option value=0>False</option></select>
+        <select id="case_sensitive" name="case_sensitive"><option value="1">True</option><option value="0">False</option></select>
         <label for="use_shingles">Shingles:</label>
-        <select id="use_shingles" name="use_shingles"><option value=1>True</option><option value=0>False</option></select>
-        Shingle length (Positive integer): <input type="number" name=shingle_length>
+        <select id="use_shingles" name="use_shingles"><option value="1">True</option><option value="0">False</option></select>
+        Shingle length (Positive integer): <input type="number" name=shingle_length min="1" max="100" required value="3">
         <label for="num_permutations">Number of permutations:</label>
-        <select id="num_permutations" name="num_permutations"><option value=128>128</option><option value=256>256</option></select>
+        <select id="num_permutations" name="num_permutations"><option value="128">128</option><option value="256">256</option></select>
       </div>
       <input type="button" id="add_template" style="width: 200px" value="Add group template">
     </form>
