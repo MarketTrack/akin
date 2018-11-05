@@ -3,7 +3,7 @@ from http import HTTPStatus
 from flask import Blueprint, current_app, request, jsonify
 from flask.blueprints import BlueprintSetupState
 from werkzeug.utils import secure_filename
-from typing import Callable, Tuple
+from typing import Tuple
 import os
 
 blueprint = Blueprint('ui', __name__)
@@ -74,12 +74,13 @@ def get_fields(dsname):
 def create_group():
     dsname = request.args.get('dataset')
     field_name = request.args.get('field')
+    group_results = True if request.args.get('group_results') == 'true' else False
     group_template = request.args.get('group_template')
 
     datasource = _akin.datasources.get(dsname)
     group_settings = _akin.grouptemplates.get(group_template)
     if datasource and datasource.data and group_settings:
-        _akin.group_data(datasource, field_name, group_settings)
+        _akin.group_data(datasource, field_name, group_results, group_settings)
     return jsonify({'success':True})
 
 
@@ -94,7 +95,6 @@ def get_group_data():
     if datasource:
         group = datasource.groups.get(group_name)
         if group:
-            #h.encode('ascii', 'ignore').decode('ascii')
             headers = [h for h in datasource.data[0].keys()]
             # Establish ids for the groups for display purposes
             group_id = 0
@@ -108,6 +108,15 @@ def get_group_data():
                 data_entries = [[dv for dk, dv in de.items() if not dk.startswith('_') and not dk.startswith('\ufeff')] for de in data_entries]
             return jsonify({'headers': headers, 'data': data_entries})
 
+
+@blueprint.route('/get_distance_matches')
+def get_distance_matches():    
+    dsname = request.args.get('dataset')
+    search_term = request.args.get('search_term')
+
+    datasource = _akin.datasources.get(dsname)
+    if datasource:
+        group = datasource.groups.get(group_name)
 
 @blueprint.route('/uploadfile', methods = ['POST'])
 def uploadfile():
@@ -128,11 +137,12 @@ def uploadfile():
     f.save(filepath)
 
     all_data_entries = []
-    with open(filepath, 'r', encoding='utf8') as data_file:
+    with open(filepath, 'r') as data_file:
         for row in csv.DictReader(data_file, dialect="excel"):
             all_data_entries.append(row)
 
     return combine_result(*_akin.add_datasource(filename, all_data_entries))
+
 
 
 def combine_result(success: bool, result: str) -> Tuple[object, HTTPStatus]:

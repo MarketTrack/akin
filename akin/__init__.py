@@ -3,6 +3,7 @@ import sqlite3
 import pickle
 from datasketch import MinHash, MinHashLSH
 from logging import getLogger
+from weighted_levenshtein import lev, osa, dam_lev
 
 __version__ = '0.1'
 _log = getLogger(__name__)
@@ -71,7 +72,7 @@ class Akin(object):
     def grouptemplates(self):
         return self._grouptemplates
 
-    def group_data(self, data_source: DataSource, field_to_index: str, group_settings: GroupTemplate):
+    def group_data(self, data_source: DataSource, field_to_index: str, group_results: bool, group_settings: GroupTemplate):
         field_hash = Akin._generate_groupid(field_to_index, group_settings)
 
         # check if this group has already been created
@@ -79,7 +80,7 @@ class Akin(object):
         if existing_group:
             return existing_group[0]
 
-        field_hash, lsh, groups = Akin._index_field(data_source, field_to_index, group_settings)
+        field_hash, lsh, groups = Akin._index_field(data_source, field_to_index, group_results, group_settings)
 
         group_data = GroupData(data_source=data_source.name, lsh=lsh, field=field_hash, values=groups)
         data_source.groups[group_data.field] = group_data
@@ -135,7 +136,7 @@ class Akin(object):
         groups = (datasource.groups.get(group_name) for group_name in group_names)
         groups = (group for group in groups if group)
 
-        results = {'headers': ['field'] + [h for h in datasource.data[0].keys()], 'data': []}
+        results = {'headers': ['field'] + ['distance'] + [h for h in datasource.data[0].keys()], 'data': []}
         for group in groups:
             group_template = self._decode_groupid(group.field)
             query_hash = MinHash(num_perm=group_template.num_permutations)
@@ -151,7 +152,12 @@ class Akin(object):
             else:
                 for w in query.split():
                     query_hash.update(w.encode('utf8'))
-            group_results = [[str(group.field)] + gr for gr in [list(datasource.data[i].values()) for i in group.lsh.query(query_hash)]]
+            result_indexes = list(group.lsh.query(query_hash))
+            values = [datasource.data[i][group_template.name] for i in result_indexes]
+            lev_distances = Akin.calculate_lev_distances_by_name(query, values, "Damerau-Levenshtein")
+            group_results = [[str(group.field)] + [lev_distances[gi]] + gr for gi, gr in enumerate([list(datasource.data[i].values()) for i in result_indexes])]
+            from operator import itemgetter
+            group_results = sorted(group_results, key=itemgetter(1)) # sort by levenshtein distance
             results['data'].extend(group_results)
         return results
         
@@ -217,10 +223,14 @@ class Akin(object):
             default_grouptemplate_80_s = GroupTemplate(name="Default 0.80 Shingled 3", description="Use MinHashLSH with shingling to find groups with a Jaccard similarity of 0.80.",
                                                   index_type="minhashlsh", threshold=0.80, case_sensitive=0, use_shingles=1, shingle_length=3,
                                                   num_permutations=128)
+            default_grouptemplate_50_s = GroupTemplate(name="Default 0.50 Shingled 3", description="Use MinHashLSH with shingling to find groups with a Jaccard similarity of 0.50.",
+                                                  index_type="minhashlsh", threshold=0.50, case_sensitive=0, use_shingles=1, shingle_length=3,
+                                                  num_permutations=128)
             self.add_grouptemplate(default_grouptemplate)
             self.add_grouptemplate(default_grouptemplate_90)
             self.add_grouptemplate(default_grouptemplate_95_s)
             self.add_grouptemplate(default_grouptemplate_80_s)
+            self.add_grouptemplate(default_grouptemplate_50_s)
         _log.info('Loaded %s group template(s): %s', len(self.grouptemplates), ", ".join(self.grouptemplates))
 
         conn.close()
@@ -260,13 +270,10 @@ class Akin(object):
         return group_template
 
     @staticmethod
-    def _index_field(data_source, field, group_settings: GroupTemplate):
-        force_rehash = False
+    def _index_field(data_source, field, group_results, group_settings: GroupTemplate):
 
         index_type = group_settings.index_type
         threshold = group_settings.threshold
-        use_shingles = group_settings.use_shingles
-        shingle_len = group_settings.shingle_length
         num_perm = group_settings.num_permutations
 
         if index_type != 'minhashlsh':
@@ -274,8 +281,87 @@ class Akin(object):
 
         field_hash = Akin._generate_groupid(field, group_settings)
         field_hash_len = field_hash + '_len'
+
+        from multiprocessing import Process, Manager, cpu_count
+        manager = Manager()
+        return_dict = manager.dict()
+        jobs = []
+        
+        _log.info('Starting minhashing...')
+        import time
+        start_time = time.time()
+
+        num_processes = cpu_count()
+        import numpy
+        data_chunks = numpy.array_split(data_source.data, num_processes)
+        num_entries = 0
+        for proc_num, data_chunk in enumerate(data_chunks):
+            p = Process(target=Akin.generate_minhash_lsh, args=(proc_num, data_chunk, num_entries, field, field_hash, field_hash_len, group_settings, return_dict))
+            num_entries += len(data_chunk)
+            jobs.append(p)
+            p.start()
+        
+        for proc in jobs:
+            proc.join()
+
         lsh = MinHashLSH(threshold, num_perm)
-        for i, entry in enumerate(data_source.data):
+        
+        _log.info(f'Time to create minhashes: {time.time() - start_time}')
+        start_time = time.time()
+
+        _log.info('Starting minhash insertion...')
+        minhashes = dict()
+        minhashsetlengths = dict()
+
+        for proc_num in range(0, len(return_dict)):
+            for row_id, minhash, minhashsetlength in return_dict[proc_num]:
+                minhashes[row_id] = minhash
+                minhashsetlengths[row_id] = minhashsetlength
+                lsh.insert(row_id, minhash)
+
+        _log.info(f'Time to insert minhashes: {time.time() - start_time}')
+        start_time = time.time()
+        _log.info('Starting grouping...')
+
+        all_groups = list()
+        if group_results:
+            unseen_indices = [1] * len(data_source.data)
+            for i, _ in enumerate(data_source.data):
+                if unseen_indices[i] == 0 or (i in minhashsetlengths and minhashsetlengths[i] == 0):
+                    continue
+                if i not in minhashes:
+                    continue
+                potential_group = list()
+                for j in lsh.query(minhashes[i]):
+                    potential_group.append(data_source.data[j])
+                    unseen_indices[j] = 0
+                if len(potential_group) > 1:
+                    group_differs_internally = False
+                    for group_item_index, group_item in enumerate(potential_group):
+                        item_value = group_item[field]
+                        other_item_values = [gitem[field] for gitemindex, gitem in enumerate(potential_group) if gitemindex != group_item_index]
+                        group_item.distances = Akin.calculate_lev_distances(item_value, other_item_values, lev)
+                        if group_item.distances:
+                            group_item.distances_avg = sum(group_item.distances) / len(group_item.distances)
+                            if group_item.distances_avg > 0:
+                                group_differs_internally = True
+                    if group_differs_internally:
+                        all_groups.append(potential_group)
+
+        _log.info(f'Time to group: {time.time() - start_time}')
+
+        return field_hash, lsh, all_groups
+
+    @staticmethod
+    def generate_minhash_lsh(proc_num, data, data_start_idx, field, field_hash, field_hash_len, group_settings: GroupTemplate, return_dict):
+        force_rehash = False
+
+        use_shingles = group_settings.use_shingles
+        shingle_len = group_settings.shingle_length
+        num_perm = group_settings.num_permutations
+
+        row_and_minhashes = list()
+        for i, entry in enumerate(data):
             if force_rehash or field_hash not in entry:
                 min_hash = MinHash(num_perm)
                 field_value = entry[field].lower()
@@ -291,24 +377,31 @@ class Akin(object):
                         set_len += 1
                 entry[field_hash] = min_hash
                 entry[field_hash_len] = set_len
-            lsh.insert(i, entry[field_hash])
+                if set_len > 0:
+                    row_and_minhashes.append((i+data_start_idx, min_hash, set_len))
+        
+        return_dict[proc_num] = row_and_minhashes
 
-        all_groups = list()
-        unseen_indices = [1] * len(data_source.data)
-        for i, entry in enumerate(data_source.data):
-            if unseen_indices[i] == 0 or entry[field_hash_len] == 0:
-                continue
-            potential_group = list()
-            matches = 0
-            for j in lsh.query(entry[field_hash]):
-                matches += 1
-                potential_group.append(data_source.data[j])
-                unseen_indices[j] = 0
-            if matches > 1:
-                all_groups.append(potential_group)
+    @staticmethod
+    def get_distance_methods() -> dict:
+        return {"Levenshtein": lev, "Optimal String Alignment": osa, "Damerau-Levenshtein": dam_lev}
 
-        return field_hash, lsh, all_groups
+    @staticmethod
+    def calculate_lev_distances(value: str, values, method):
+        try:
+            value = value.lower()
+            return [method(value, i.lower()) for i in values]
+        except Exception as e:
+            _log.info(f'Bad value: {value}')
+        return None
 
+    @staticmethod
+    def calculate_lev_distances_by_name(value: str, values, method_name: str):
+        if method_name not in Akin.get_distance_methods():
+            _log.error(f'Unknown distance method {method_name}')
+            return None
+        method = Akin.get_distance_methods()[method_name]
+        return Akin.calculate_lev_distances(value, values, method)
 
 def export_group(group_data: GroupData):
     filename = group_data.field + '.txt'
@@ -320,7 +413,3 @@ def export_group(group_data: GroupData):
 if __name__ == "__main__":
     akin = Akin('brand_settings.yml')
     akin.initialize()
-
-#c.execute('''CREATE TABLE group_values (data_source_name text, group_name text, lsh blob, group_values blob)''')
-#c.execute('''INSERT INTO group_values VALUES (?,?,?,?)''', (ds_fn, test.groups[0].field, pickle.dumps(test.groups[0].lsh) pickle.dumps(test.groups[0].values)))
-#c.execute('''INSERT INTO group_values VALUES (?,?,?,?,?,?,?,?)''', ("Default", "Use MinHashLSH to find groups with a Jaccard similarity of 1.","minhashlsh",1.0,0,0,4,128))
