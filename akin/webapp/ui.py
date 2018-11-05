@@ -74,12 +74,13 @@ def get_fields(dsname):
 def create_group():
     dsname = request.args.get('dataset')
     field_name = request.args.get('field')
+    group_results = True if request.args.get('group_results') == 'true' else False
     group_template = request.args.get('group_template')
 
     datasource = _akin.datasources.get(dsname)
     group_settings = _akin.grouptemplates.get(group_template)
     if datasource and datasource.data and group_settings:
-        _akin.group_data(datasource, field_name, group_settings)
+        _akin.group_data(datasource, field_name, group_results, group_settings)
     return jsonify({'success':True})
 
 
