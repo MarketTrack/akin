@@ -124,6 +124,7 @@ $(document).ready(function() {
   datasets.change(update_options);
   update_datasets(datasets, '/get_datasets');
   $("#query_form").submit(query);
+  $("#query").on('input propertychange paste', query);
 });
 </script>
 
