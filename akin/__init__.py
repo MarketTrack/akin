@@ -96,6 +96,7 @@ class Akin(object):
         try:
             self.grouptemplates[group_template.name] = group_template
         except KeyError:
+            _log.info('Data source with the name %s already exists', group_template.name)
             return False, f'Data source with the name "{group_template.name}" already exists'
         db_cursor, conn = self._get_db_cursor()
         db_cursor.execute('''INSERT INTO group_templates VALUES (?,?,?,?,?,?,?,?)''', \
@@ -104,6 +105,7 @@ class Akin(object):
                            group_template.num_permutations))
         conn.commit()
         conn.close()
+        _log.info('Added group template: %s', group_template.name)
         return True, 'Successfully added group template'
 
     def add_datasource(self, data_source_name: str, data: Iterable[Dict[str, str]]) -> Tuple[bool, str]:
@@ -211,26 +213,15 @@ class Akin(object):
                                                                 threshold=threshold, case_sensitive=case_sensitive, use_shingles=use_shingles, 
                                                                 shingle_length=shingle_length, num_permutations=num_permutations)
         if not self._grouptemplates:
-            default_grouptemplate = GroupTemplate(name="Default", description="Use MinHashLSH to find groups with a Jaccard similarity of 1.",
-                                                  index_type="minhashlsh", threshold=1.0, case_sensitive=0, use_shingles=0, shingle_length=4,
-                                                  num_permutations=128)
-            default_grouptemplate_90 = GroupTemplate(name="Default 0.9", description="Use MinHashLSH to find groups with a Jaccard similarity of 0.9.",
-                                                  index_type="minhashlsh", threshold=0.9, case_sensitive=0, use_shingles=0, shingle_length=4,
-                                                  num_permutations=128)
-            default_grouptemplate_95_s = GroupTemplate(name="Default 0.95 Shingled 3", description="Use MinHashLSH with shingling to find groups with a Jaccard similarity of 0.95.",
-                                                  index_type="minhashlsh", threshold=0.95, case_sensitive=0, use_shingles=1, shingle_length=3,
-                                                  num_permutations=128)
-            default_grouptemplate_80_s = GroupTemplate(name="Default 0.80 Shingled 3", description="Use MinHashLSH with shingling to find groups with a Jaccard similarity of 0.80.",
-                                                  index_type="minhashlsh", threshold=0.80, case_sensitive=0, use_shingles=1, shingle_length=3,
-                                                  num_permutations=128)
-            default_grouptemplate_50_s = GroupTemplate(name="Default 0.50 Shingled 3", description="Use MinHashLSH with shingling to find groups with a Jaccard similarity of 0.50.",
-                                                  index_type="minhashlsh", threshold=0.50, case_sensitive=0, use_shingles=1, shingle_length=3,
+            default_grouptemplate = GroupTemplate(name="Default: threshold 1.0 - case sensitive 0 - shingle length 4 - number of permutations 128",
+                                                  description="Use MinHashLSH to find groups with a Jaccard similarity of 1.",
+                                                  index_type="minhashlsh",
+                                                  threshold=1.0,
+                                                  case_sensitive=0,
+                                                  use_shingles=0,
+                                                  shingle_length=4,
                                                   num_permutations=128)
             self.add_grouptemplate(default_grouptemplate)
-            self.add_grouptemplate(default_grouptemplate_90)
-            self.add_grouptemplate(default_grouptemplate_95_s)
-            self.add_grouptemplate(default_grouptemplate_80_s)
-            self.add_grouptemplate(default_grouptemplate_50_s)
         _log.info('Loaded %s group template(s): %s', len(self.grouptemplates), ", ".join(self.grouptemplates))
 
         conn.close()
@@ -239,35 +230,40 @@ class Akin(object):
     def _generate_groupid(field, group_settings: GroupTemplate):
         index_type = group_settings.index_type
         threshold = group_settings.threshold
+        case_sensitive = group_settings.case_sensitive
         use_shingles = group_settings.use_shingles
         shingle_len = group_settings.shingle_length
         num_perm = group_settings.num_permutations
 
         shingle_marker = str(use_shingles) + (str(shingle_len) if use_shingles else '')
-        field_hash = '_'.join([field, index_type, str(threshold), str(num_perm), shingle_marker])
+        field_hash = '_'.join([field, index_type, str(threshold), str(case_sensitive), str(num_perm), shingle_marker])  
         field_hash = '__' + field_hash # Use a double underscore to denote that this is a system field
         return field_hash
+
 
     @staticmethod
     def _decode_groupid(field: str) -> GroupTemplate:
         if not field.startswith('__'):
             raise ValueError(f'unsupported field: {field}')
-        
-        field, index_type, threshold, num_perm, shingle_marker = field[2:].rsplit("_", 4)
 
+        field, index_type, threshold, case_sensitive, num_perm, shingle_marker = field[2:].rsplit("_", 5)
+
+        threshold = float(threshold)
+        case_sensitive = int(case_sensitive)
+        num_perm = int(num_perm)
         use_shingles = int(shingle_marker[0])
         shingle_length = int(shingle_marker[1:]) if use_shingles else 0
-        group_template = GroupTemplate(
-            name=field,
-            description='',
-            index_type=index_type,
-            threshold=float(threshold),
-            case_sensitive=0,
-            use_shingles=use_shingles,
-            shingle_length=shingle_length,
-            num_permutations=int(num_perm))
+        group_template = GroupTemplate(name=field,
+                                       description='',
+                                       index_type=index_type,
+                                       threshold=threshold,
+                                       case_sensitive=case_sensitive,
+                                       use_shingles=use_shingles,
+                                       shingle_length=shingle_length,
+                                       num_permutations=num_perm)
 
         return group_template
+
 
     @staticmethod
     def _index_field(data_source, field, group_results, group_settings: GroupTemplate):
@@ -356,6 +352,7 @@ class Akin(object):
     def generate_minhash_lsh(proc_num, data, data_start_idx, field, field_hash, field_hash_len, group_settings: GroupTemplate, return_dict):
         force_rehash = False
 
+        case_sensitive = group_settings.case_sensitive
         use_shingles = group_settings.use_shingles
         shingle_len = group_settings.shingle_length
         num_perm = group_settings.num_permutations
@@ -364,7 +361,10 @@ class Akin(object):
         for i, entry in enumerate(data):
             if force_rehash or field_hash not in entry:
                 min_hash = MinHash(num_perm)
-                field_value = entry[field].lower()
+                if case_sensitive:
+                    field_value = entry[field].lower()
+                else:
+                    field_value = entry[field]
                 set_len = 0
                 if use_shingles:
                     if len(field_value) > shingle_len:

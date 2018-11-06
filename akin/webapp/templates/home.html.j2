@@ -32,6 +32,9 @@ function reload_groups() {
   var dataset = $('#dataset').val();
   reload_combobox($('#group'), '/get_groups' + '/' + dataset);
 }
+function reload_template() {
+  reload_combobox($('#group_template'), '/get_template');
+}
 function reload_fields() {
   var dataset = $('#dataset').val();
   reload_combobox($('#field'), '/get_fields' + '/' + dataset);
@@ -86,6 +89,21 @@ $(document).ready(function() {
         <input type="checkbox" name="group_results" id="group_results" value="True" checked />
       </div>
       <input type="button" id="create_group" style="width: 15em" value="Perform Grouping">
+    </form>
+
+    <h4>Add group template</h4>
+    <form>
+      <div>
+        <b>Threshold (0.01 - 1.00):</b> <input type="number" name=threshold min="0.01" max="1.00" required value="1.00">
+        <label for="case_sensitive">Case Sensitive:</label>
+        <select id="case_sensitive" name="case_sensitive"><option value="1">True</option><option value="0">False</option></select>
+        <label for="use_shingles">Shingles:</label>
+        <select id="use_shingles" name="use_shingles"><option value="1">True</option><option value="0">False</option></select>
+        <b>Shingle length (Positive integer):</b> <input type="number" name=shingle_length min="1" max="100" required value="3">
+        <label for="num_permutations">Permutations:</label>
+        <select id="num_permutations" name="num_permutations"><option value="128">128</option><option value="256">256</option></select>
+      </div>
+      <input type="button" id="add_template" style="width: 200px" value="Add group template">
     </form>
   </div>
 
@@ -171,6 +189,28 @@ $("#create_group").click(function (e) {
     },
     error: function (result) {
       reload_groups()
+    }
+  });
+});
+
+$("#add_template").click(function (e) {
+  e.preventDefault();
+  $.ajax({
+    url: "/add_template",
+    data: {
+      id: $(this).val(), // < note use of 'this' here
+      threshold: $('input[name="threshold"]').val(),
+      case_sensitive: $("#case_sensitive").val(),
+      use_shingles: $("#use_shingles").val(),
+      shingle_length: $('input[name="shingle_length"]').val(),
+      num_permutations: $("#num_permutations").val()
+    },
+    dataType: 'json',
+    success: function (result) {
+      reload_template()
+    },
+    error: function (result) {
+      reload_template()
     }
   });
 });
