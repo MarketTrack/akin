@@ -3,7 +3,7 @@
 <style rel="stylesheet">
 form label           { width: 10em; text-align: right; display: inline-block; }
 form > input         { margin-left: 9.75em; display: block; }
-#datasource_wrapper  { margin-top: 1em; width: 100%; }
+#datasource_wrapper  { margin-top: 1em; width: 100%; overflow-x: auto; }
 </style>
 {% endblock %}
 {% block body %}
@@ -199,15 +199,13 @@ $("#view_group").click(function (e) {
       });
       var table = $('#datasource').DataTable();
       table.destroy();
-      $('#datasource').empty()
-      // if (typeof table.destroy === 'function') {
-      //   table.destroy()
-      // }
+      $('#datasource').empty();
+      $('#groupings_section').show();
       table = $('#datasource').DataTable({
         data: result.data,
         columns: my_columns,
-        iDisplayLength: 50,
-        scrollX: true,
+        pageLength: 50,
+        autoWidth: false,
         order: [[group_index, 'asc']],
         dom: "<'row'<'col-sm-3'l><'col-sm-3'f><'col-sm-6'p>>" +
           "<'row'<'col-sm-12'tr>>" +
@@ -222,8 +220,6 @@ $("#view_group").click(function (e) {
           col.visible(false);
         }
       });
-
-      $('#groupings_section').show();
     },
     error: function (result) {
       $('#groupings_section').hide();

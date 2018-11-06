@@ -5,7 +5,7 @@ form                 { margin-top: 0.75em; overflow: auto; }
 form label           { width: 7em; text-align: right; display: inline-block; }
 form > input         { margin-left: 6.9em; display: block; }
 form > fieldset      { margin-left: 7.2em; width: 30%; display: block; }
-#datasource_wrapper  { margin-top: 1em; width: 100%; }
+#datasource_wrapper  { margin-top: 1em; width: 100%; overflow-x: auto; }
 </style>
 {% endblock %}
 {% block body %}
@@ -76,30 +76,23 @@ function query(e) {
     processData: false,
     success: function (result) {
       console.log(result);
-      var group_index = 0;
       var my_columns = [];
       $.each(result.headers, function (index, header) {
-        var my_item = {};
-        my_item.data = index;
-        my_item.title = header;
-        my_columns.push(my_item);
-        if (header.match('group_id$')) {
-          group_index = index;
-        }
+        var column = {
+          'data': index,
+          'title': header,
+        };
+        my_columns.push(column);
       });
       var table = $('#datasource').DataTable();
       table.destroy();
       $('#datasource').empty()
+      $('#groupings_section').show();
       table = $('#datasource').DataTable({
         data: result.data,
         columns: my_columns,
-        iDisplayLength: 50,
-        scrollX: true,
-        order: [[group_index, 'asc']],
-        dom: "<'row'<'col-sm-3'l><'col-sm-3'f><'col-sm-6'p>>" +
-          "<'row'<'col-sm-12'tr>>" +
-          "<'row'<'col-sm-5'i><'col-sm-7'p>>",
-        rowGroup: { dataSrc: group_index },
+        pageLength: 50,
+        autoWidth: false,
       });
 
       table.columns().every(function () {
@@ -109,8 +102,6 @@ function query(e) {
           col.visible(false);
         }
       });
-
-      $('#groupings_section').show();
     },
     error: function (result) {
       console.log(result);
@@ -124,6 +115,7 @@ $(document).ready(function() {
   datasets.change(update_options);
   update_datasets(datasets, '/get_datasets');
   $("#query_form").submit(query);
+  $("#fields").change(query);
   $("#query").on('input propertychange paste', query);
 });
 </script>
